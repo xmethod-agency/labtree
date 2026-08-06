@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, Pencil, Save, Sparkles } from 'lucide-react';
+import { ArrowLeft, Check, Pencil, Save, Sparkles } from 'lucide-react';
 import { useStore } from '@/store/useStore';
 import { CERTIFICATION_LABEL, LABEL_TYPE_LABEL } from '@/data/products';
 import { supplierById } from '@/data/suppliers';
@@ -16,6 +16,7 @@ export function ProductDetailPage() {
   const products = useStore((s) => s.products);
   const threads = useStore((s) => s.threads);
   const updateProduct = useStore((s) => s.updateProduct);
+  const publishProduct = useStore((s) => s.publishProduct);
   const product = products.find((p) => p.id === productId);
 
   const [editing, setEditing] = useState(false);
@@ -52,10 +53,16 @@ export function ProductDetailPage() {
         description={`${product.category} / ${product.subCategory} · ${product.applicationArea.join(', ')}`}
         actions={
           <>
-            {product.source === 'sourced' && (
+            {product.publishStatus === 'draft' && <Badge variant="warn">Draft</Badge>}
+            {product.source === 'sourced' && product.publishStatus === 'published' && (
               <Badge variant="lime">
                 <Sparkles /> Newly sourced
               </Badge>
+            )}
+            {product.publishStatus === 'draft' && (
+              <Button onClick={() => publishProduct(product.id)}>
+                <Check /> Publish
+              </Button>
             )}
             <Button variant="outline" asChild>
               <Link to="/admin/catalog">

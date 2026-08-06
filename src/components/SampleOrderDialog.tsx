@@ -2,8 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { CheckCircle2 } from 'lucide-react';
 import type { Product, ShippingAddress } from '@/types';
-import { customer } from '@/data/customer';
-import { useStore } from '@/store/useStore';
+import { useStore, selectCurrentAccount } from '@/store/useStore';
 import {
   Dialog,
   DialogContent,
@@ -24,15 +23,24 @@ interface SampleOrderDialogProps {
 
 export function SampleOrderDialog({ product, briefId, onClose }: SampleOrderDialogProps) {
   const createOrder = useStore((s) => s.createOrder);
-  const [address, setAddress] = useState<ShippingAddress>(customer.address);
+  const account = useStore(selectCurrentAccount);
+  const fallbackAddress: ShippingAddress = account?.address ?? {
+    name: '',
+    company: '',
+    street: '',
+    zip: '',
+    city: '',
+    country: 'Germany',
+  };
+  const [address, setAddress] = useState<ShippingAddress>(fallbackAddress);
   const [orderId, setOrderId] = useState<string | null>(null);
 
   useEffect(() => {
     if (product) {
       setOrderId(null);
-      setAddress(customer.address);
+      setAddress(account?.address ?? fallbackAddress);
     }
-  }, [product]);
+  }, [product, account?.id]);
 
   const field = (key: keyof ShippingAddress, label: string) => (
     <div className="flex flex-col gap-1.5">

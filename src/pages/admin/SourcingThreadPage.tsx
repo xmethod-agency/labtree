@@ -28,7 +28,7 @@ import { Button } from '@/components/ui/button';
 import { Input, Label, Textarea } from '@/components/ui/input';
 import { cn, formatNumber, formatTime } from '@/lib/utils';
 
-const STEPS = ['Manufacturers', 'Enquiries', 'Replies', 'Catalog'];
+const STEPS = ['Manufacturers', 'RFQs', 'Form replies', 'Publish'];
 
 function StepBar({ current }: { current: number }) {
   return (
@@ -151,10 +151,23 @@ function ConfidenceTag({ value }: { value?: number }) {
 function OfferReview({ thread }: { thread: EmailThread }) {
   const updateParsedOffer = useStore((s) => s.updateParsedOffer);
   const importOffer = useStore((s) => s.importOffer);
+  const publishProduct = useStore((s) => s.publishProduct);
+  const products = useStore((s) => s.products);
   const [importing, setImporting] = useState(false);
-  const [imported, setImported] = useState<{ productId: string; newMatches: number } | null>(null);
+  const [publishing, setPublishing] = useState(false);
+  const [imported, setImported] = useState<{ productId: string; newMatches: number } | null>(
+    thread.createdProductId
+      ? { productId: thread.createdProductId, newMatches: 0 }
+      : null,
+  );
+  const [publishResult, setPublishResult] = useState<{ newMatches: number } | null>(
+    thread.status === 'published' ? { newMatches: 0 } : null,
+  );
   const offer = thread.parsedOffer;
   const inbound = [...thread.messages].reverse().find((m) => m.direction === 'inbound');
+  const draftProduct = imported
+    ? products.find((p) => p.id === imported.productId)
+    : undefined;
 
   if (!offer || !inbound) return null;
 
@@ -281,22 +294,45 @@ function OfferReview({ thread }: { thread: EmailThread }) {
         {imported ? (
           <div className="mt-3 rounded-2xl border border-good/40 bg-good-soft p-4">
             <p className="text-[13px] font-medium">
-              Added to catalog as <span className="num">{imported.productId}</span>
+              Draft product <span className="num">{imported.productId}</span>
+              {draftProduct?.publishStatus === 'draft' ? ' — not visible to customers' : ' — published'}
             </p>
             <p className="mt-1 text-[12px] text-ink-soft">
-              The brief was automatically re-matched: {imported.newMatches} new match
-              {imported.newMatches === 1 ? '' : 'es'}. The product stays available for future
-              enquiries.
+              Review the extracted fields, then publish. Until publication, customers cannot see this
+              product in matching results.
             </p>
+            {publishResult ? (
+              <p className="mt-2 text-[12px] text-ink-soft">
+                Published. Brief re-matched: {publishResult.newMatches} new match
+                {publishResult.newMatches === 1 ? '' : 'es'}.
+              </p>
+            ) : null}
             <div className="mt-3 flex flex-wrap gap-2">
+              {draftProduct?.publishStatus === 'draft' && (
+                <Button
+                  size="sm"
+                  disabled={publishing}
+                  onClick={() => {
+                    setPublishing(true);
+                    const result = publishProduct(imported.productId);
+                    setPublishing(false);
+                    if (result) setPublishResult(result);
+                  }}
+                >
+                  {publishing ? <Loader2 className="animate-spin" /> : <Check />}
+                  Publish to catalog
+                </Button>
+              )}
               <Button size="sm" variant="outline" asChild>
                 <Link to={`/admin/catalog/${imported.productId}`}>Open product</Link>
               </Button>
-              <Button size="sm" asChild>
-                <Link to={`/results/${thread.briefId}`}>
-                  Customer view <ArrowRight />
-                </Link>
-              </Button>
+              {(publishResult || draftProduct?.publishStatus === 'published') && (
+                <Button size="sm" asChild>
+                  <Link to={`/results/${thread.briefId}`}>
+                    Customer view <ArrowRight />
+                  </Link>
+                </Button>
+              )}
             </div>
           </div>
         ) : (
@@ -311,7 +347,7 @@ function OfferReview({ thread }: { thread: EmailThread }) {
             }}
           >
             {importing ? <Loader2 className="animate-spin" /> : <PlusCircle />}
-            {importing ? 'Writing to catalog…' : 'Add to catalog'}
+            {importing ? 'Creating draft…' : 'Create draft product'}
           </Button>
         )}
       </div>
@@ -375,14 +411,28 @@ export function SourcingThreadPage() {
   const drafts = threads.filter((t) => t.status === 'draft');
   const pending = threads.filter((t) => t.status === 'awaiting_reply');
   const answered = threads.filter((t) =>
-    ['replied', 'parsed', 'imported', 'declined'].includes(t.status),
+    ['replied', 'parsed', 'imported', 'draft_created', 'published', 'declined'].includes(t.status),
   );
-  const imported = threads.filter((t) => t.status === 'imported');
+  const drafted = threads.filter((t) =>
+    ['draft_created', 'published', 'imported'].includes(t.status),
+  );
+  const publishedCount = threads.filter((t) => t.status === 'published').length;
 
   const step =
-    threads.length === 0 ? 0 : drafts.length === threads.length ? 1 : imported.length ? 3 : 2;
+    threads.length === 0
+      ? 0
+      : drafts.length === threads.length
+        ? 1
+        : publishedCount
+          ? 3
+          : drafted.length
+            ? 3
+            : 2;
 
-  const currentMatches = matchProducts(brief, products);
+  const currentMatches = matchProducts(
+    brief,
+    products.filter((p) => p.publishStatus === 'published'),
+  );
 
   return (
     <Section>
@@ -467,7 +517,8 @@ export function SourcingThreadPage() {
           </ul>
           <div className="flex flex-wrap items-center justify-between gap-3 border-t border-hairline p-5">
             <p className="text-[12px] text-muted">
-              One email per manufacturer is generated from the brief and can be edited before sending.
+              Each selected manufacturer receives the same standardised RFQ with a personal response
+              form link.
             </p>
             <Button
               disabled={selected.length === 0 || drafting}
@@ -478,7 +529,7 @@ export function SourcingThreadPage() {
               }}
             >
               {drafting ? <Loader2 className="animate-spin" /> : <Sparkles />}
-              {drafting ? 'Generating enquiries…' : `Generate ${selected.length} enquiries`}
+              {drafting ? 'Generating RFQs…' : `Generate ${selected.length} RFQs`}
             </Button>
           </div>
         </div>
@@ -489,13 +540,14 @@ export function SourcingThreadPage() {
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-card border border-hairline bg-surface p-5">
             <div>
               <h2 className="text-[15px] font-semibold display-tight">
-                Review enquiries ({drafts.length})
+                Review standardised RFQs ({drafts.length})
               </h2>
               <p className="text-[12px] text-muted">
-                AI-generated from the brief. Edit any email — the version shown here is what gets sent.
+                Same brief fields for every manufacturer, each with a unique form URL. Edit before
+                sending.
                 {replyMode === 'manual'
-                  ? ' Replies are set to manual: you will write them yourself.'
-                  : ' Replies will arrive simulated, within seconds.'}
+                  ? ' Form replies are manual — open each form link or paste an email.'
+                  : ' Form submissions will be simulated within seconds.'}
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -534,9 +586,18 @@ export function SourcingThreadPage() {
                     <p className="num text-[11px] text-muted">
                       {message.from} → {message.to}
                     </p>
+                    <p className="mt-1 text-[11px]">
+                      Form:{' '}
+                      <Link
+                        className="text-ink underline decoration-hairline underline-offset-4"
+                        to={`/supplier/respond/${thread.formToken}`}
+                      >
+                        /supplier/respond/{thread.formToken}
+                      </Link>
+                    </p>
                   </div>
                   <Badge variant="lavender">
-                    <Sparkles /> AI-generated
+                    <Sparkles /> Standardised RFQ
                   </Badge>
                 </div>
                 <div className="flex flex-col gap-3 p-5">
@@ -570,12 +631,12 @@ export function SourcingThreadPage() {
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-card border border-hairline bg-surface p-5">
             <div>
               <h2 className="text-[15px] font-semibold display-tight">
-                Replies ({answered.length}/{threads.length})
+                Form responses ({answered.length}/{threads.length})
               </h2>
               <p className="text-[12px] text-muted">
                 {replyMode === 'auto'
-                  ? "Replies arrive on timers scaled to each manufacturer's response behaviour — compressed to seconds for this demo."
-                  : 'Manual mode: nothing arrives on its own. Write each manufacturer reply yourself and the AI extracts the product data.'}
+                  ? 'Suppliers fill the personal form; submissions are simulated on timers for this demo. Each response becomes a draft product until you publish.'
+                  : 'Manual mode: open the form link as the supplier, or paste an email reply for AI extraction.'}
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -607,7 +668,9 @@ export function SourcingThreadPage() {
 
           {threads.map((thread) => {
             const supplier = supplierById(thread.supplierId)!;
-            const isOpen = expanded === thread.id || thread.status === 'parsed';
+            const reviewStatuses = ['parsed', 'imported', 'draft_created', 'published'];
+            const isOpen =
+              expanded === thread.id || reviewStatuses.includes(thread.status);
             return (
               <div key={thread.id} className="rounded-card border border-hairline bg-paper">
                 <div className="flex flex-wrap items-center justify-between gap-3 p-5">
@@ -618,12 +681,12 @@ export function SourcingThreadPage() {
                       {thread.composing && (
                         <Badge variant="lavender">
                           <Loader2 className="animate-spin" /> {supplier.name.split(' ')[0]} is
-                          writing…
+                          filling the form…
                         </Badge>
                       )}
                       {thread.parsing && (
                         <Badge variant="lavender">
-                          <Loader2 className="animate-spin" /> AI extracting product data…
+                          <Loader2 className="animate-spin" /> Creating draft product…
                         </Badge>
                       )}
                     </div>
@@ -636,9 +699,16 @@ export function SourcingThreadPage() {
                   </div>
                   <div className="flex items-center gap-2">
                     {thread.status === 'awaiting_reply' && (
-                      <Button size="sm" variant="outline" onClick={() => void followUp(thread.id)}>
-                        <Mail /> Follow up
-                      </Button>
+                      <>
+                        <Button size="sm" variant="outline" asChild>
+                          <Link to={`/supplier/respond/${thread.formToken}`} target="_blank">
+                            Open form
+                          </Link>
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => void followUp(thread.id)}>
+                          <Mail /> Follow up
+                        </Button>
+                      </>
                     )}
                     <Button
                       size="sm"
@@ -651,7 +721,7 @@ export function SourcingThreadPage() {
                   </div>
                 </div>
 
-                {isOpen && thread.status !== 'parsed' && thread.status !== 'imported' && (
+                {isOpen && !reviewStatuses.includes(thread.status) && (
                   <ul className="divide-y divide-hairline border-t border-hairline">
                     {thread.messages.map((message) => (
                       <li key={message.id} className="p-5">
@@ -672,11 +742,9 @@ export function SourcingThreadPage() {
                   </ul>
                 )}
 
-                {(thread.status === 'parsed' || thread.status === 'imported') && (
-                  <OfferReview thread={thread} />
-                )}
+                {reviewStatuses.includes(thread.status) && <OfferReview thread={thread} />}
 
-                {thread.status !== 'parsed' && thread.status !== 'imported' && (
+                {!reviewStatuses.includes(thread.status) && (
                   <ManualReply
                     thread={thread}
                     brief={brief}
@@ -696,10 +764,14 @@ export function SourcingThreadPage() {
               {currentMatches.length === 1 ? '' : 'es'} right now
             </h3>
             <p className="mt-2 max-w-2xl text-[13px] leading-relaxed text-paper/70">
-              Every offer imported here becomes a permanent catalog product. The brief is re-matched
-              immediately, and the next customer asking for something similar finds it without any
-              sourcing at all — {formatNumber(products.filter((p) => p.source === 'sourced').length)}{' '}
-              product(s) have already been added this session.
+              Form responses create draft product cards. Customers only see a product after you
+              publish it — {formatNumber(products.filter((p) => p.publishStatus === 'draft').length)}{' '}
+              draft(s) and{' '}
+              {formatNumber(
+                products.filter((p) => p.source === 'sourced' && p.publishStatus === 'published')
+                  .length,
+              )}{' '}
+              published sourced product(s) this session.
             </p>
             <Button className="mt-5" asChild>
               <Link to={`/results/${brief.id}`}>

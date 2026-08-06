@@ -1,6 +1,9 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { AppHeader } from '@/components/AppHeader';
-import { useStore } from '@/store/useStore';
+import { useStore, selectCurrentAccount } from '@/store/useStore';
+import { LoginPage } from '@/pages/LoginPage';
+import { RegisterPage } from '@/pages/RegisterPage';
+import { SupplierResponsePage } from '@/pages/SupplierResponsePage';
 import { ChatPage } from '@/pages/ChatPage';
 import { ResultsPage } from '@/pages/ResultsPage';
 import { OrdersPage } from '@/pages/OrdersPage';
@@ -14,95 +17,131 @@ import { SourcingPage } from '@/pages/admin/SourcingPage';
 import { SourcingThreadPage } from '@/pages/admin/SourcingThreadPage';
 import { SamplesPage } from '@/pages/admin/SamplesPage';
 
-function AdminOnly({ children }: { children: React.ReactNode }) {
-  const role = useStore((s) => s.role);
-  if (role !== 'admin') return <Navigate to="/chat" replace />;
+function RequireAuth({ children, role }: { children: React.ReactNode; role?: 'customer' | 'admin' }) {
+  const account = useStore(selectCurrentAccount);
+  if (!account) return <Navigate to="/login" replace />;
+  if (role && account.role !== role) {
+    return <Navigate to={account.role === 'admin' ? '/admin' : '/chat'} replace />;
+  }
   return <>{children}</>;
 }
 
 export default function App() {
-  const role = useStore((s) => s.role);
+  const account = useStore(selectCurrentAccount);
 
   return (
     <div className="flex min-h-screen flex-col">
       <AppHeader />
       <main className="flex-1">
         <Routes>
-          <Route path="/" element={<Navigate to={role === 'customer' ? '/chat' : '/admin'} replace />} />
-          <Route path="/chat" element={<ChatPage />} />
-          <Route path="/results/:briefId" element={<ResultsPage />} />
-          <Route path="/orders" element={<OrdersPage />} />
+          <Route
+            path="/"
+            element={
+              <Navigate
+                to={!account ? '/login' : account.role === 'admin' ? '/admin' : '/chat'}
+                replace
+              />
+            }
+          />
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/register" element={<RegisterPage />} />
+          <Route path="/supplier/respond/:token" element={<SupplierResponsePage />} />
+
+          <Route
+            path="/chat"
+            element={
+              <RequireAuth role="customer">
+                <ChatPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/results/:briefId"
+            element={
+              <RequireAuth>
+                <ResultsPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/orders"
+            element={
+              <RequireAuth role="customer">
+                <OrdersPage />
+              </RequireAuth>
+            }
+          />
 
           <Route
             path="/admin"
             element={
-              <AdminOnly>
+              <RequireAuth role="admin">
                 <DashboardPage />
-              </AdminOnly>
+              </RequireAuth>
             }
           />
           <Route
             path="/admin/briefs"
             element={
-              <AdminOnly>
+              <RequireAuth role="admin">
                 <BriefsPage />
-              </AdminOnly>
+              </RequireAuth>
             }
           />
           <Route
             path="/admin/briefs/:briefId"
             element={
-              <AdminOnly>
+              <RequireAuth role="admin">
                 <BriefDetailPage />
-              </AdminOnly>
+              </RequireAuth>
             }
           />
           <Route
             path="/admin/catalog"
             element={
-              <AdminOnly>
+              <RequireAuth role="admin">
                 <CatalogPage />
-              </AdminOnly>
+              </RequireAuth>
             }
           />
           <Route
             path="/admin/catalog/:productId"
             element={
-              <AdminOnly>
+              <RequireAuth role="admin">
                 <ProductDetailPage />
-              </AdminOnly>
+              </RequireAuth>
             }
           />
           <Route
             path="/admin/suppliers"
             element={
-              <AdminOnly>
+              <RequireAuth role="admin">
                 <SuppliersPage />
-              </AdminOnly>
+              </RequireAuth>
             }
           />
           <Route
             path="/admin/sourcing"
             element={
-              <AdminOnly>
+              <RequireAuth role="admin">
                 <SourcingPage />
-              </AdminOnly>
+              </RequireAuth>
             }
           />
           <Route
             path="/admin/sourcing/:briefId"
             element={
-              <AdminOnly>
+              <RequireAuth role="admin">
                 <SourcingThreadPage />
-              </AdminOnly>
+              </RequireAuth>
             }
           />
           <Route
             path="/admin/samples"
             element={
-              <AdminOnly>
+              <RequireAuth role="admin">
                 <SamplesPage />
-              </AdminOnly>
+              </RequireAuth>
             }
           />
 

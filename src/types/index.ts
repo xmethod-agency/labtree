@@ -1,6 +1,29 @@
 export type Role = 'customer' | 'admin';
 
+export interface ShippingAddress {
+  name: string;
+  company: string;
+  street: string;
+  zip: string;
+  city: string;
+  country: string;
+}
+
+export interface Account {
+  id: string;
+  email: string;
+  /** Demo-only plaintext password. */
+  password: string;
+  role: Role;
+  name: string;
+  company: string;
+  jobTitle: string;
+  address: ShippingAddress;
+}
+
 export type LabelType = 'white_label' | 'private_label';
+
+export type PublishStatus = 'draft' | 'published';
 
 export type Certification =
   | 'vegan'
@@ -54,10 +77,20 @@ export interface Product {
   inStockSamples: boolean;
   description: string;
   source: 'catalog' | 'sourced';
+  /** Draft products stay invisible to customers until an admin publishes them. */
+  publishStatus: PublishStatus;
+  /** Brief that triggered sourcing for this product, if any. */
+  sourcedFromBriefId?: string | null;
   createdAt: string;
 }
 
-export type BriefStatus = 'draft' | 'matching' | 'matched' | 'sourcing' | 'completed';
+export type BriefStatus =
+  | 'draft'
+  | 'matching'
+  | 'matched'
+  | 'sourcing_requested'
+  | 'sourcing'
+  | 'completed';
 
 export type BriefField =
   | 'category'
@@ -78,6 +111,8 @@ export interface Brief {
   status: BriefStatus;
   raw: string;
   inputMethod: 'chat' | 'pdf' | 'excel' | 'form';
+  /** Owning customer account — used to scope customer views. */
+  accountId: string;
   customerName: string;
   company: string;
   category: Category | null;
@@ -122,15 +157,6 @@ export interface MatchResult {
 
 export type SampleOrderStatus = 'requested' | 'label_created' | 'shipped' | 'delivered';
 
-export interface ShippingAddress {
-  name: string;
-  company: string;
-  street: string;
-  zip: string;
-  city: string;
-  country: string;
-}
-
 export interface SampleOrder {
   id: string;
   briefId: string;
@@ -150,6 +176,8 @@ export type ThreadStatus =
   | 'replied'
   | 'parsed'
   | 'declined'
+  | 'draft_created'
+  | 'published'
   | 'imported';
 
 export interface EmailMessage {
@@ -161,6 +189,22 @@ export interface EmailMessage {
   body: string;
   timestamp: string;
   attachmentName?: string;
+}
+
+/** Structured supplier response submitted via the personal form link. */
+export interface SupplierFormSubmission {
+  productName: string;
+  volumeMl: number;
+  keyIngredients: string;
+  certifications: Certification[];
+  priceMin: number;
+  priceMax: number;
+  moq: number;
+  leadTimeWeeks: number;
+  labelTypes: LabelType[];
+  inciExcerpt: string;
+  notes: string;
+  sampleAvailable: boolean;
 }
 
 export interface ParsedOffer {
@@ -192,6 +236,8 @@ export interface EmailThread {
   sentAt: string | null;
   messages: EmailMessage[];
   parsedOffer: ParsedOffer | null;
+  /** Unique token for the supplier response form URL. */
+  formToken: string;
   /** The AI is writing the manufacturer's reply. */
   composing?: boolean;
   /** The AI is extracting product data from a received reply. */

@@ -163,12 +163,15 @@ export const openrouterProvider: AiProvider = {
           role: 'user',
           content: `Brief: ${JSON.stringify(input.brief)}\nManufacturer: ${input.supplier.name} (${
             input.supplier.country
-          })\nSignature:\n${agency.signature}`,
+          })\nPersonal response form URL (must appear in the email body): ${input.formUrl}\nSignature:\n${agency.signature}`,
         },
       ]);
       const parsed = parseJson<{ subject: string; body: string }>(raw);
       if (!parsed.subject || !parsed.body) throw new Error('incomplete email');
-      return parsed;
+      const body = parsed.body.includes(input.formUrl)
+        ? parsed.body
+        : `${parsed.body}\n\nSubmit your offer here: ${input.formUrl}`;
+      return { subject: parsed.subject, body };
     } catch (error) {
       warn('draftSupplierEmail', error);
       return supplierEmailTemplate(input);

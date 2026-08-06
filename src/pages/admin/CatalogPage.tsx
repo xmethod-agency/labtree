@@ -23,6 +23,7 @@ export function CatalogPage() {
   const [supplierId, setSupplierId] = useState('all');
   const [certification, setCertification] = useState('all');
   const [source, setSource] = useState('all');
+  const [publishFilter, setPublishFilter] = useState('all');
   const [sort, setSort] = useState<SortKey>('name');
 
   const filtered = useMemo(() => {
@@ -38,6 +39,7 @@ export function CatalogPage() {
       )
         return false;
       if (source !== 'all' && product.source !== source) return false;
+      if (publishFilter !== 'all' && product.publishStatus !== publishFilter) return false;
       return true;
     });
 
@@ -55,19 +57,20 @@ export function CatalogPage() {
           return a.name.localeCompare(b.name);
       }
     });
-  }, [products, query, category, supplierId, certification, source, sort]);
+  }, [products, query, category, supplierId, certification, source, publishFilter, sort]);
 
   const sourced = products.filter((p) => p.source === 'sourced').length;
+  const drafts = products.filter((p) => p.publishStatus === 'draft').length;
 
   return (
     <Section>
       <PageHeader
         index="Admin"
         title="Catalog"
-        description={`${formatNumber(products.length)} products · ${sourced} of them sourced in this session.`}
+        description={`${formatNumber(products.length)} products · ${sourced} sourced · ${drafts} draft(s) awaiting publish.`}
       />
 
-      <div className="mt-8 grid gap-2 sm:grid-cols-2 lg:grid-cols-6">
+      <div className="mt-8 grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         <div className="relative sm:col-span-2">
           <Search className="pointer-events-none absolute left-3.5 top-1/2 size-3.5 -translate-y-1/2 text-muted" />
           <input
@@ -101,20 +104,23 @@ export function CatalogPage() {
             </option>
           ))}
         </Select>
-        <div className="grid grid-cols-2 gap-2">
-          <Select value={source} onChange={(e) => setSource(e.target.value)}>
-            <option value="all">Any source</option>
-            <option value="catalog">Catalog</option>
-            <option value="sourced">Sourced</option>
-          </Select>
-          <Select value={sort} onChange={(e) => setSort(e.target.value as SortKey)}>
-            <option value="name">Sort: name</option>
-            <option value="volume">Sort: volume</option>
-            <option value="price">Sort: price</option>
-            <option value="moq">Sort: MOQ</option>
-            <option value="lead">Sort: lead time</option>
-          </Select>
-        </div>
+        <Select value={source} onChange={(e) => setSource(e.target.value)}>
+          <option value="all">Any source</option>
+          <option value="catalog">Catalog</option>
+          <option value="sourced">Sourced</option>
+        </Select>
+        <Select value={publishFilter} onChange={(e) => setPublishFilter(e.target.value)}>
+          <option value="all">Any status</option>
+          <option value="published">Published</option>
+          <option value="draft">Draft</option>
+        </Select>
+        <Select value={sort} onChange={(e) => setSort(e.target.value as SortKey)}>
+          <option value="name">Sort: name</option>
+          <option value="volume">Sort: volume</option>
+          <option value="price">Sort: price</option>
+          <option value="moq">Sort: MOQ</option>
+          <option value="lead">Sort: lead time</option>
+        </Select>
       </div>
 
       <p className="mt-3 text-[12px] text-muted">
@@ -151,6 +157,11 @@ export function CatalogPage() {
                   {product.id}
                   {product.source === 'sourced' && (
                     <Sparkles className="ml-1.5 inline size-3 text-warn" />
+                  )}
+                  {product.publishStatus === 'draft' && (
+                    <Badge variant="warn" className="ml-1.5">
+                      draft
+                    </Badge>
                   )}
                 </TD>
                 <TD>

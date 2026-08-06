@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type {
+  Account,
   ActivityItem,
   Brief,
   ChatMessage,
@@ -12,10 +13,11 @@ import type {
   SampleOrder,
   SampleOrderStatus,
   ShippingAddress,
+  SupplierFormSubmission,
 } from '@/types';
 import { products as catalogSeed } from '@/data/products';
 import { suppliers } from '@/data/suppliers';
-import { agency, customer } from '@/data/customer';
+import { SEED_ACCOUNTS, agency, customer } from '@/data/accounts';
 import {
   REPLY_MIX,
   attachmentFor,
@@ -31,16 +33,34 @@ import type { AiMode } from '@/lib/ai/provider';
 import { uid } from '@/lib/utils';
 
 const now = () => new Date().toISOString();
+const DEFAULT_ACCOUNT_ID = SEED_ACCOUNTS[0].id;
 
-function emptyBrief(id: string, inputMethod: Brief['inputMethod'], raw: string): Brief {
+function formUrlFor(token: string) {
+  if (typeof window !== 'undefined') {
+    return `${window.location.origin}/supplier/respond/${token}`;
+  }
+  return `/supplier/respond/${token}`;
+}
+
+function publishedCatalog(products: Product[]) {
+  return products.filter((p) => p.publishStatus === 'published');
+}
+
+function emptyBrief(
+  id: string,
+  inputMethod: Brief['inputMethod'],
+  raw: string,
+  account: Account,
+): Brief {
   return {
     id,
     createdAt: now(),
     status: 'draft',
     raw,
     inputMethod,
-    customerName: customer.name,
-    company: customer.company,
+    accountId: account.id,
+    customerName: account.name,
+    company: account.company,
     category: null,
     subCategory: null,
     applicationArea: null,
@@ -62,8 +82,16 @@ function seedBrief(
   patch: Partial<Brief>,
   status: Brief['status'],
 ): Brief {
-  const brief: Brief = { ...emptyBrief(id, 'chat', patch.raw ?? ''), ...patch, id, createdAt, status };
-  brief.matchIds = matchProducts(brief, catalogSeed).map((m) => m.productId);
+  const account = SEED_ACCOUNTS[0];
+  const brief: Brief = {
+    ...emptyBrief(id, 'chat', patch.raw ?? '', account),
+    ...patch,
+    id,
+    createdAt,
+    status,
+    accountId: account.id,
+  };
+  brief.matchIds = matchProducts(brief, publishedCatalog(catalogSeed)).map((m) => m.productId);
   return brief;
 }
 
@@ -182,6 +210,8 @@ const SEED_ACTIVITY: ActivityItem[] = [
 export type ReplyMode = 'auto' | 'manual';
 
 interface DemoState {
+  accounts: Account[];
+  currentAccountId: string | null;
   role: Role;
   aiMode: AiMode;
   replyMode: ReplyMode;
@@ -196,7 +226,16 @@ interface DemoState {
   counters: { brief: number; order: number };
   activeBriefId: string | null;
 
-  setRole: (role: Role) => void;
+  login: (email: string, password: string) => { ok: true } | { ok: false; error: string };
+  register: (input: {
+    name: string;
+    company: string;
+    email: string;
+    password: string;
+  }) => { ok: true } | { ok: false; error: string };
+  switchAccount: (accountId: string) => void;
+  logout: () => void;
+
   setAiMode: (mode: AiMode) => void;
   setReplyMode: (mode: ReplyMode) => void;
   toggleSupplierNames: () => void;
@@ -207,6 +246,7 @@ interface DemoState {
   appendChat: (briefId: string, message: ChatMessage) => void;
   markAsked: (briefId: string, questionId: string) => void;
   runMatch: (briefId: string) => string[];
+  requestSourcing: (briefId: string) => void;
 
   updateProduct: (id: string, patch: Partial<Product>) => void;
   createOrder: (briefId: string, productId: string, address: ShippingAddress) => string;
@@ -217,18 +257,26 @@ interface DemoState {
   updateThreadDraft: (threadId: string, subject: string, body: string) => void;
   sendThreads: (briefId: string) => void;
   deliverReply: (threadId: string) => Promise<void>;
-  /** Demo control: the presenter writes the manufacturer's reply by hand. */
   injectSupplierReply: (threadId: string, body: string) => Promise<void>;
+  submitSupplierForm: (
+    token: string,
+    submission: SupplierFormSubmission,
+  ) => Promise<{ ok: true; productId: string } | { ok: false; error: string }>;
   fastForward: (briefId: string) => Promise<void>;
   followUp: (threadId: string) => Promise<void>;
   updateParsedOffer: (threadId: string, patch: Partial<ParsedOffer>) => void;
+  /** Creates a draft catalog product from a parsed offer — not visible to customers yet. */
   importOffer: (threadId: string) => Promise<{ productId: string; newMatches: number } | null>;
+  /** Publishes a draft product and re-matches the linked brief. */
+  publishProduct: (productId: string) => { newMatches: number } | null;
 
   logActivity: (kind: ActivityItem['kind'], text: string) => void;
   resetDemo: () => void;
 }
 
 const initialState = {
+  accounts: SEED_ACCOUNTS,
+  currentAccountId: DEFAULT_ACCOUNT_ID as string | null,
   role: 'customer' as Role,
   aiMode: 'auto' as AiMode,
   replyMode: 'auto' as ReplyMode,
@@ -247,12 +295,170 @@ const initialState = {
 /** Pending reply timers live outside the persisted store. */
 const replyTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
+function currentAccount(state: { accounts: Account[]; currentAccountId: string | null }) {
+  return state.accounts.find((a) => a.id === state.currentAccountId) ?? null;
+}
+
+function offerFromSubmission(submission: SupplierFormSubmission, brief: Brief): ParsedOffer {
+  return {
+    productName: submission.productName,
+    volumeMl: submission.volumeMl,
+    keyIngredients: submission.keyIngredients
+      .split(/[,;·]/)
+      .map((s) => s.trim())
+      .filter(Boolean),
+    certifications: submission.certifications,
+    priceMin: submission.priceMin,
+    priceMax: submission.priceMax,
+    moq: submission.moq,
+    leadTimeWeeks: submission.leadTimeWeeks,
+    labelTypes: submission.labelTypes.length
+      ? submission.labelTypes
+      : brief.labelType
+        ? [brief.labelType]
+        : ['white_label', 'private_label'],
+    inciExcerpt: submission.inciExcerpt,
+    confidence: 100,
+    fieldConfidence: {
+      productName: 100,
+      volumeMl: 100,
+      keyIngredients: 100,
+      certifications: 100,
+      priceMin: 100,
+      priceMax: 100,
+      moq: 100,
+      leadTimeWeeks: 100,
+      inciExcerpt: 100,
+    },
+    needsReview: false,
+  };
+}
+
+async function createDraftFromOffer(
+  get: () => DemoState,
+  set: (partial: Partial<DemoState> | ((s: DemoState) => Partial<DemoState>)) => void,
+  threadId: string,
+  offer: ParsedOffer,
+): Promise<{ productId: string; newMatches: number } | null> {
+  const state = get();
+  const thread = state.threads.find((t) => t.id === threadId);
+  const brief = state.briefs.find((b) => b.id === thread?.briefId);
+  if (!thread || !brief) return null;
+
+  const provider = getProvider(state.aiMode);
+  const copy = await provider.enrichProductCopy({ offer, brief });
+  const supplier = suppliers.find((s) => s.id === thread.supplierId)!;
+  const skuBase = supplier.name.replace(/[^A-Z]/g, '').slice(0, 3) || 'NEW';
+  const productId = `${skuBase}-NW-${Math.floor(1000 + Math.random() * 8999)}`;
+
+  const product: Product = {
+    id: productId,
+    supplierId: thread.supplierId,
+    name: copy.name,
+    category: copy.category,
+    subCategory: copy.subCategory,
+    applicationArea: copy.applicationArea,
+    volumeMl: offer.volumeMl,
+    keyIngredients: offer.keyIngredients,
+    inciExcerpt: offer.inciExcerpt,
+    certifications: offer.certifications,
+    labelTypes: offer.labelTypes,
+    priceMin: offer.priceMin,
+    priceMax: offer.priceMax,
+    moq: offer.moq,
+    leadTimeWeeks: offer.leadTimeWeeks,
+    inStockSamples: false,
+    description: copy.description,
+    source: 'sourced',
+    publishStatus: 'draft',
+    sourcedFromBriefId: brief.id,
+    createdAt: now(),
+  };
+
+  set((s) => ({
+    products: [product, ...s.products],
+    threads: s.threads.map((t) =>
+      t.id === threadId
+        ? {
+            ...t,
+            status: 'draft_created',
+            parsedOffer: offer,
+            createdProductId: productId,
+            parsing: false,
+            composing: false,
+          }
+        : t,
+    ),
+  }));
+  get().logActivity(
+    'catalog',
+    `Draft product ${productId} created from ${supplier.name} — awaiting publish`,
+  );
+  return { productId, newMatches: 0 };
+}
+
 export const useStore = create<DemoState>()(
   persist(
     (set, get) => ({
       ...initialState,
 
-      setRole: (role) => set({ role }),
+      login: (email, password) => {
+        const account = get().accounts.find(
+          (a) => a.email.toLowerCase() === email.trim().toLowerCase(),
+        );
+        if (!account || account.password !== password) {
+          return { ok: false, error: 'Invalid email or password' };
+        }
+        set({ currentAccountId: account.id, role: account.role });
+        return { ok: true };
+      },
+
+      register: ({ name, company, email, password }) => {
+        const normalized = email.trim().toLowerCase();
+        if (!name.trim() || !company.trim() || !normalized || password.length < 4) {
+          return { ok: false, error: 'Please fill in all fields (password min. 4 characters)' };
+        }
+        if (get().accounts.some((a) => a.email.toLowerCase() === normalized)) {
+          return { ok: false, error: 'An account with this email already exists' };
+        }
+        const account: Account = {
+          id: uid('acc'),
+          email: normalized,
+          password,
+          role: 'customer',
+          name: name.trim(),
+          company: company.trim(),
+          jobTitle: 'Customer',
+          address: {
+            name: name.trim(),
+            company: company.trim(),
+            street: '',
+            zip: '',
+            city: '',
+            country: 'Germany',
+          },
+        };
+        set((s) => ({
+          accounts: [...s.accounts, account],
+          currentAccountId: account.id,
+          role: 'customer',
+        }));
+        get().logActivity('system', `Account registered: ${account.email}`);
+        return { ok: true };
+      },
+
+      switchAccount: (accountId) => {
+        const account = get().accounts.find((a) => a.id === accountId);
+        if (!account) return;
+        set({
+          currentAccountId: account.id,
+          role: account.role,
+          activeBriefId: null,
+        });
+      },
+
+      logout: () => set({ currentAccountId: null, role: 'customer', activeBriefId: null }),
+
       setAiMode: (aiMode) => set({ aiMode }),
       setReplyMode: (replyMode) => set({ replyMode }),
       toggleSupplierNames: () => set((s) => ({ revealSupplierNames: !s.revealSupplierNames })),
@@ -263,16 +469,20 @@ export const useStore = create<DemoState>()(
         })),
 
       createBrief: (inputMethod, raw) => {
+        const account = currentAccount(get());
+        if (!account || account.role !== 'customer') {
+          throw new Error('Only customers can create briefs');
+        }
         const next = get().counters.brief + 1;
         const id = `BR-2026-${String(next).padStart(4, '0')}`;
         set((s) => ({
           counters: { ...s.counters, brief: next },
-          briefs: [emptyBrief(id, inputMethod, raw), ...s.briefs],
+          briefs: [emptyBrief(id, inputMethod, raw, account), ...s.briefs],
           chats: { ...s.chats, [id]: [] },
           askedIds: { ...s.askedIds, [id]: [] },
           activeBriefId: id,
         }));
-        get().logActivity('brief', `Brief ${id} opened via ${inputMethod}`);
+        get().logActivity('brief', `Brief ${id} opened via ${inputMethod} by ${account.name}`);
         return id;
       },
 
@@ -300,12 +510,20 @@ export const useStore = create<DemoState>()(
         const { briefs, products } = get();
         const brief = briefs.find((b) => b.id === briefId);
         if (!brief) return [];
-        const results = matchProducts(brief, products);
+        const results = matchProducts(brief, publishedCatalog(products));
         const matchIds = results.map((r) => r.productId);
         set((s) => ({
           briefs: s.briefs.map((b) =>
             b.id === briefId
-              ? { ...b, matchIds, status: matchIds.length ? 'matched' : 'sourcing' }
+              ? {
+                  ...b,
+                  matchIds,
+                  status: matchIds.length
+                    ? 'matched'
+                    : b.status === 'sourcing' || b.status === 'sourcing_requested'
+                      ? b.status
+                      : 'sourcing_requested',
+                }
               : b,
           ),
         }));
@@ -316,6 +534,20 @@ export const useStore = create<DemoState>()(
             : `Brief ${briefId}: no catalog match — sourcing required`,
         );
         return matchIds;
+      },
+
+      requestSourcing: (briefId) => {
+        const brief = get().briefs.find((b) => b.id === briefId);
+        if (!brief) return;
+        set((s) => ({
+          briefs: s.briefs.map((b) =>
+            b.id === briefId ? { ...b, status: 'sourcing_requested' } : b,
+          ),
+        }));
+        get().logActivity(
+          'sourcing',
+          `Sourcing requested for ${briefId} (${brief.company}) — awaiting Labtree admin`,
+        );
       },
 
       updateProduct: (id, patch) => {
@@ -384,7 +616,12 @@ export const useStore = create<DemoState>()(
         const drafts = await Promise.all(
           supplierIds.map(async (supplierId, index) => {
             const supplier = suppliers.find((s) => s.id === supplierId)!;
-            const { subject, body } = await provider.draftSupplierEmail({ brief, supplier });
+            const formToken = uid('frm');
+            const { subject, body } = await provider.draftSupplierEmail({
+              brief,
+              supplier,
+              formUrl: formUrlFor(formToken),
+            });
             const thread: EmailThread = {
               id: `TH-${briefId.slice(-4)}-${supplierId.slice(-2)}`,
               briefId,
@@ -393,6 +630,7 @@ export const useStore = create<DemoState>()(
               replyKind: REPLY_MIX[index % REPLY_MIX.length],
               replyDelayMs: replyDelayFor(supplier),
               sentAt: null,
+              formToken,
               composing: false,
               parsing: false,
               parsedOffer: null,
@@ -419,7 +657,7 @@ export const useStore = create<DemoState>()(
         }));
         get().logActivity(
           'sourcing',
-          `${drafts.length} enquiries drafted for ${briefId} (AI-generated)`,
+          `${drafts.length} standardised RFQs drafted for ${briefId}`,
         );
       },
 
@@ -449,9 +687,8 @@ export const useStore = create<DemoState>()(
               : t,
           ),
         }));
-        get().logActivity('sourcing', `${threads.length} enquiries sent for ${briefId}`);
+        get().logActivity('sourcing', `${threads.length} RFQs sent for ${briefId}`);
 
-        // In manual mode nothing is scheduled — every reply is typed by the presenter.
         if (get().replyMode === 'manual') return;
 
         for (const thread of threads) {
@@ -467,42 +704,71 @@ export const useStore = create<DemoState>()(
       deliverReply: async (threadId) => {
         const state = get();
         const thread = state.threads.find((t) => t.id === threadId);
-        // `composing` guards against a timer and a fast-forward firing together.
         if (!thread || thread.status !== 'awaiting_reply' || thread.composing) return;
         const brief = state.briefs.find((b) => b.id === thread.briefId);
         const supplier = suppliers.find((s) => s.id === thread.supplierId);
         if (!brief || !supplier) return;
 
-        const outbound = thread.messages[0];
-        const deviation = thread.replyKind === 'offer_deviation';
         const isDecline = thread.replyKind === 'decline';
-        const offer = buildOffer(brief, supplier, deviation);
-        const provider = getProvider(get().aiMode);
-
-        // The reply itself is written by the model in this manufacturer's voice,
-        // which is what makes the extraction step further down worth showing.
         set((s) => ({
           threads: s.threads.map((t) => (t.id === threadId ? { ...t, composing: true } : t)),
         }));
 
-        const { body } = await provider.draftSupplierReply({
-          brief,
-          supplier,
-          kind: thread.replyKind,
-          offer,
-          enquiry: outbound.body,
-        });
+        if (isDecline) {
+          const inbound: EmailMessage = {
+            id: uid('msg'),
+            direction: 'inbound',
+            from: supplier.contactEmail,
+            to: agency.email,
+            subject: `Re: ${thread.messages[0].subject}`,
+            body: `Dear Labtree team,\n\nUnfortunately we cannot offer a matching product for ${brief.id} at this time.\n\nKind regards\n${supplier.name}`,
+            timestamp: now(),
+          };
+          set((s) => ({
+            threads: s.threads.map((t) =>
+              t.id === threadId
+                ? {
+                    ...t,
+                    status: 'declined',
+                    composing: false,
+                    messages: [...t.messages, inbound],
+                  }
+                : t,
+            ),
+          }));
+          get().logActivity('sourcing', `${supplier.name} declined the enquiry`);
+          return;
+        }
+
+        // Simulate the supplier filling the personal response form.
+        const deviation = thread.replyKind === 'offer_deviation';
+        const offerDraft = buildOffer(brief, supplier, deviation);
+        const submission: SupplierFormSubmission = {
+          productName: offerDraft.productName,
+          volumeMl: offerDraft.volumeMl,
+          keyIngredients: offerDraft.keyIngredients.join(', '),
+          certifications: offerDraft.certifications,
+          priceMin: offerDraft.priceMin,
+          priceMax: offerDraft.priceMax,
+          moq: offerDraft.moq,
+          leadTimeWeeks: offerDraft.leadTimeWeeks,
+          labelTypes: offerDraft.labelTypes,
+          inciExcerpt: offerDraft.inciExcerpt,
+          notes: '',
+          sampleAvailable: true,
+        };
 
         const inbound: EmailMessage = {
           id: uid('msg'),
           direction: 'inbound',
           from: supplier.contactEmail,
           to: agency.email,
-          subject: `Re: ${outbound.subject}`,
-          body,
+          subject: `Form response — ${brief.id}`,
+          body: `${supplier.name} submitted the response form.\n\nProduct: ${submission.productName}\nVolume: ${submission.volumeMl} ml\nPrice: ${submission.priceMin}–${submission.priceMax} €\nMOQ: ${submission.moq}`,
           timestamp: now(),
-          attachmentName:
-            isDecline || !personaFor(supplier.id).attaches ? undefined : attachmentFor(offer),
+          attachmentName: personaFor(supplier.id).attaches
+            ? attachmentFor(offerDraft)
+            : undefined,
         };
 
         set((s) => ({
@@ -510,33 +776,18 @@ export const useStore = create<DemoState>()(
             t.id === threadId
               ? {
                   ...t,
-                  status: isDecline ? 'declined' : 'replied',
+                  status: 'replied',
                   composing: false,
-                  parsing: !isDecline,
+                  parsing: true,
                   messages: [...t.messages, inbound],
                 }
               : t,
           ),
         }));
-        get().logActivity(
-          'sourcing',
-          isDecline
-            ? `${supplier.name} declined the enquiry`
-            : `Reply from ${supplier.name} received`,
-        );
+        get().logActivity('sourcing', `Form response from ${supplier.name} received`);
 
-        if (isDecline) return;
-
-        const parsedOffer = await provider.parseOffer({ email: inbound, brief });
-        set((s) => ({
-          threads: s.threads.map((t) =>
-            t.id === threadId ? { ...t, parsing: false, parsedOffer, status: 'parsed' } : t,
-          ),
-        }));
-        get().logActivity(
-          'sourcing',
-          `Offer from ${supplier.name} extracted (${parsedOffer.confidence}% confidence)`,
-        );
+        const parsedOffer = offerFromSubmission(submission, brief);
+        await createDraftFromOffer(get, set, threadId, parsedOffer);
       },
 
       injectSupplierReply: async (threadId, body) => {
@@ -574,24 +825,78 @@ export const useStore = create<DemoState>()(
         const parsedOffer = await getProvider(get().aiMode).parseOffer({ email: inbound, brief });
         const hasOffer = parsedOffer.volumeMl > 0 || parsedOffer.priceMin > 0;
 
+        if (!hasOffer) {
+          set((s) => ({
+            threads: s.threads.map((t) =>
+              t.id === threadId
+                ? { ...t, parsing: false, parsedOffer: null, status: 'declined' }
+                : t,
+            ),
+          }));
+          get().logActivity('sourcing', `Reply from ${supplier.name} contains no offer data`);
+          return;
+        }
+
         set((s) => ({
           threads: s.threads.map((t) =>
-            t.id === threadId
-              ? {
-                  ...t,
-                  parsing: false,
-                  parsedOffer: hasOffer ? parsedOffer : null,
-                  status: hasOffer ? 'parsed' : 'declined',
-                }
-              : t,
+            t.id === threadId ? { ...t, parsing: false, parsedOffer, status: 'parsed' } : t,
           ),
         }));
         get().logActivity(
           'sourcing',
-          hasOffer
-            ? `Offer from ${supplier.name} extracted (${parsedOffer.confidence}% confidence)`
-            : `Reply from ${supplier.name} contains no offer data`,
+          `Offer from ${supplier.name} extracted (${parsedOffer.confidence}% confidence)`,
         );
+      },
+
+      submitSupplierForm: async (token, submission) => {
+        const thread = get().threads.find((t) => t.formToken === token);
+        if (!thread) return { ok: false, error: 'This form link is invalid or has expired.' };
+        if (thread.status === 'draft_created' || thread.status === 'published' || thread.status === 'imported') {
+          return { ok: false, error: 'An offer has already been submitted for this enquiry.' };
+        }
+        if (thread.status === 'declined') {
+          return { ok: false, error: 'This enquiry was declined.' };
+        }
+        if (thread.status === 'draft') {
+          return { ok: false, error: 'This enquiry has not been sent yet.' };
+        }
+
+        const brief = get().briefs.find((b) => b.id === thread.briefId);
+        const supplier = suppliers.find((s) => s.id === thread.supplierId);
+        if (!brief || !supplier) return { ok: false, error: 'Enquiry not found.' };
+
+        const timer = replyTimers.get(thread.id);
+        if (timer) {
+          clearTimeout(timer);
+          replyTimers.delete(thread.id);
+        }
+
+        if (!submission.productName.trim() || !submission.volumeMl || !submission.priceMin) {
+          return { ok: false, error: 'Please fill in product name, volume and price.' };
+        }
+
+        const inbound: EmailMessage = {
+          id: uid('msg'),
+          direction: 'inbound',
+          from: supplier.contactEmail,
+          to: agency.email,
+          subject: `Form response — ${brief.id}`,
+          body: `${supplier.name} submitted the response form for ${brief.id}.`,
+          timestamp: now(),
+        };
+
+        set((s) => ({
+          threads: s.threads.map((t) =>
+            t.id === thread.id
+              ? { ...t, status: 'replied', parsing: true, messages: [...t.messages, inbound] }
+              : t,
+          ),
+        }));
+
+        const parsedOffer = offerFromSubmission(submission, brief);
+        const result = await createDraftFromOffer(get, set, thread.id, parsedOffer);
+        if (!result) return { ok: false, error: 'Could not create product draft.' };
+        return { ok: true, productId: result.productId };
       },
 
       fastForward: async (briefId) => {
@@ -621,7 +926,7 @@ export const useStore = create<DemoState>()(
           from: agency.email,
           to: supplier.contactEmail,
           subject: `Follow-up: ${thread.messages[0].subject}`,
-          body: followUpBody(brief),
+          body: `${followUpBody(brief)}\n\nYour personal form: ${formUrlFor(thread.formToken)}`,
           timestamp: now(),
         };
         set((s) => ({
@@ -660,49 +965,32 @@ export const useStore = create<DemoState>()(
       importOffer: async (threadId) => {
         const state = get();
         const thread = state.threads.find((t) => t.id === threadId);
-        const brief = state.briefs.find((b) => b.id === thread?.briefId);
-        if (!thread?.parsedOffer || !brief) return null;
+        if (!thread?.parsedOffer) return null;
+        if (thread.createdProductId) {
+          return { productId: thread.createdProductId, newMatches: 0 };
+        }
+        return createDraftFromOffer(get, set, threadId, thread.parsedOffer);
+      },
 
-        const provider = getProvider(state.aiMode);
-        const copy = await provider.enrichProductCopy({ offer: thread.parsedOffer, brief });
-        const offer = thread.parsedOffer;
-        const supplier = suppliers.find((s) => s.id === thread.supplierId)!;
-        const skuBase = supplier.name.replace(/[^A-Z]/g, '').slice(0, 3) || 'NEW';
-        const productId = `${skuBase}-NW-${Math.floor(1000 + Math.random() * 8999)}`;
+      publishProduct: (productId) => {
+        const product = get().products.find((p) => p.id === productId);
+        if (!product || product.publishStatus === 'published') return null;
 
-        const product: Product = {
-          id: productId,
-          supplierId: thread.supplierId,
-          name: copy.name,
-          category: copy.category,
-          subCategory: copy.subCategory,
-          applicationArea: copy.applicationArea,
-          volumeMl: offer.volumeMl,
-          keyIngredients: offer.keyIngredients,
-          inciExcerpt: offer.inciExcerpt,
-          certifications: offer.certifications,
-          labelTypes: offer.labelTypes,
-          priceMin: offer.priceMin,
-          priceMax: offer.priceMax,
-          moq: offer.moq,
-          leadTimeWeeks: offer.leadTimeWeeks,
-          inStockSamples: false,
-          description: copy.description,
-          source: 'sourced',
-          createdAt: now(),
-        };
-
-        const before = get().briefs.find((b) => b.id === brief.id)?.matchIds.length ?? 0;
         set((s) => ({
-          products: [product, ...s.products],
+          products: s.products.map((p) =>
+            p.id === productId ? { ...p, publishStatus: 'published' } : p,
+          ),
           threads: s.threads.map((t) =>
-            t.id === threadId ? { ...t, status: 'imported', createdProductId: productId } : t,
+            t.createdProductId === productId ? { ...t, status: 'published' } : t,
           ),
         }));
-        get().logActivity('catalog', `${productId} added to catalog from ${supplier.name} offer`);
+        get().logActivity('catalog', `${productId} published to customer catalog`);
 
-        const matchIds = get().runMatch(brief.id);
-        return { productId, newMatches: Math.max(0, matchIds.length - before) };
+        const briefId = product.sourcedFromBriefId;
+        if (!briefId) return { newMatches: 0 };
+        const before = get().briefs.find((b) => b.id === briefId)?.matchIds.length ?? 0;
+        const matchIds = get().runMatch(briefId);
+        return { newMatches: Math.max(0, matchIds.length - before) };
       },
 
       resetDemo: () => {
@@ -712,9 +1000,11 @@ export const useStore = create<DemoState>()(
       },
     }),
     {
-      name: 'labtree-demo-v1',
-      version: 1,
+      name: 'labtree-demo-v2',
+      version: 2,
       partialize: (state) => ({
+        accounts: state.accounts,
+        currentAccountId: state.currentAccountId,
         role: state.role,
         aiMode: state.aiMode,
         replyMode: state.replyMode,
@@ -737,3 +1027,7 @@ export const selectBrief = (id: string | undefined) => (s: DemoState) =>
   s.briefs.find((b) => b.id === id);
 export const selectProduct = (id: string | undefined) => (s: DemoState) =>
   s.products.find((p) => p.id === id);
+export const selectCurrentAccount = (s: DemoState) =>
+  s.accounts.find((a) => a.id === s.currentAccountId) ?? null;
+export const selectPublishedProducts = (s: DemoState) =>
+  s.products.filter((p) => p.publishStatus === 'published');

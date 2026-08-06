@@ -33,6 +33,8 @@ export interface ChatTurnResult {
 export interface DraftEmailInput {
   brief: Brief;
   supplier: Supplier;
+  /** Personal form URL the supplier uses to submit an offer. */
+  formUrl: string;
 }
 
 export interface DraftReplyInput {

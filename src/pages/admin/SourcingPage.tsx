@@ -17,9 +17,9 @@ export function SourcingPage() {
   const openCases = briefs.filter(
     (b) =>
       !threads.some((t) => t.briefId === b.id) &&
-      b.matchIds.length === 0 &&
-      b.status !== 'draft' &&
-      b.status !== 'completed',
+      (b.status === 'sourcing_requested' ||
+        b.status === 'sourcing' ||
+        (b.matchIds.length === 0 && b.status !== 'draft' && b.status !== 'completed')),
   );
 
   return (
@@ -37,7 +37,8 @@ export function SourcingPage() {
               Open sourcing cases ({openCases.length})
             </h2>
             <p className="text-[12px] text-muted">
-              These briefs found nothing in the catalog — the loop starts here.
+              Customer-requested sourcing and briefs with no catalog match. Select manufacturers and
+              send standardised RFQs.
             </p>
           </div>
           {openCases.length === 0 ? (
