@@ -3,7 +3,7 @@ import { Bookmark, BookmarkCheck, ChevronDown, ChevronUp } from 'lucide-react';
 import type { MatchResult, Product } from '@/types';
 import { CERTIFICATION_LABEL, LABEL_TYPE_LABEL } from '@/data/products';
 import { supplierAlias, supplierById } from '@/data/suppliers';
-import { useStore, selectIsSaved } from '@/store/useStore';
+import { useStore } from '@/store/useStore';
 import { MatchScore } from '@/components/MatchScore';
 import { Button } from '@/components/ui/button';
 import { DataCell } from '@/components/PageHeader';
@@ -36,7 +36,12 @@ export function ProductCard({
   const toggleSupplierNames = useStore((s) => s.toggleSupplierNames);
   const addToCatalog = useStore((s) => s.addToCatalog);
   const removeFromCatalog = useStore((s) => s.removeFromCatalog);
-  const saved = useStore(selectIsSaved(product.id));
+  const saved = useStore(
+    (s) =>
+      (s.savedProducts ?? []).some(
+        (item) => item.accountId === s.currentAccountId && item.productId === product.id,
+      ),
+  );
   const supplier = supplierById(product.supplierId);
   const isAdmin = role === 'admin';
   const canSeeName = isAdmin && revealSupplierNames;

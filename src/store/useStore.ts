@@ -1084,13 +1084,3 @@ export const selectCurrentAccount = (s: DemoState) =>
   s.accounts.find((a) => a.id === s.currentAccountId) ?? null;
 export const selectPublishedProducts = (s: DemoState) =>
   s.products.filter((p) => p.publishStatus === 'published');
-
-export const selectMySavedProducts = (s: DemoState) =>
-  s.savedProducts.filter((item) => item.accountId === s.currentAccountId);
-
-export const selectIsSaved =
-  (productId: string) =>
-  (s: DemoState) =>
-    s.savedProducts.some(
-      (item) => item.accountId === s.currentAccountId && item.productId === productId,
-    );

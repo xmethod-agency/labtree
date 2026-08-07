@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Bookmark, PackageOpen } from 'lucide-react';
-import type { Product } from '@/types';
-import { useStore, selectCurrentAccount, selectMySavedProducts } from '@/store/useStore';
+import type { Product, SavedProduct } from '@/types';
+import { useStore, selectCurrentAccount } from '@/store/useStore';
 import { ProductCard } from '@/components/ProductCard';
 import { SampleOrderDialog } from '@/components/SampleOrderDialog';
 import { PageHeader, Section } from '@/components/PageHeader';
@@ -11,9 +11,15 @@ import { formatDate } from '@/lib/utils';
 
 export function CustomerCatalogPage() {
   const account = useStore(selectCurrentAccount);
-  const saved = useStore(selectMySavedProducts);
+  const accountId = useStore((s) => s.currentAccountId);
+  const savedProducts = useStore((s) => s.savedProducts);
   const products = useStore((s) => s.products);
   const [sampleProduct, setSampleProduct] = useState<Product | null>(null);
+
+  const saved = useMemo(
+    () => (savedProducts ?? []).filter((item) => item.accountId === accountId),
+    [savedProducts, accountId],
+  );
 
   const items = useMemo(() => {
     return saved
@@ -23,9 +29,7 @@ export function CustomerCatalogPage() {
           (p) => p.id === entry.productId && p.publishStatus === 'published',
         ),
       }))
-      .filter((row): row is { entry: (typeof saved)[number]; product: Product } =>
-        Boolean(row.product),
-      );
+      .filter((row): row is { entry: SavedProduct; product: Product } => Boolean(row.product));
   }, [saved, products]);
 
   return (
