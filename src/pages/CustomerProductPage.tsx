@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Bookmark, BookmarkCheck } from 'lucide-react';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
+import { ArrowLeft } from 'lucide-react';
 import type { Product } from '@/types';
 import { CERTIFICATION_LABEL, LABEL_TYPE_LABEL } from '@/data/products';
 import { useStore } from '@/store/useStore';
@@ -14,17 +14,8 @@ import { formatNumber } from '@/lib/utils';
 export function CustomerProductPage() {
   const { productId } = useParams();
   const [searchParams] = useSearchParams();
-  const navigate = useNavigate();
-  const briefId = searchParams.get('brief') ;
+  const briefId = searchParams.get('brief');
   const products = useStore((s) => s.products);
-  const accountId = useStore((s) => s.currentAccountId);
-  const addToCatalog = useStore((s) => s.addToCatalog);
-  const removeFromCatalog = useStore((s) => s.removeFromCatalog);
-  const saved = useStore((s) =>
-    (s.savedProducts ?? []).some(
-      (item) => item.accountId === s.currentAccountId && item.productId === productId,
-    ),
-  );
   const [sampleProduct, setSampleProduct] = useState<Product | null>(null);
 
   const product = products.find(
@@ -36,15 +27,15 @@ export function CustomerProductPage() {
       <Section>
         <PageHeader title="Product not found" />
         <Button className="mt-6" variant="outline" asChild>
-          <Link to="/catalog">
-            <ArrowLeft /> Back to catalog
+          <Link to={briefId ? `/results/${briefId}` : '/chat'}>
+            <ArrowLeft /> Back
           </Link>
         </Button>
       </Section>
     );
   }
 
-  const backTo = briefId ? `/results/${briefId}` : '/catalog';
+  const backTo = briefId ? `/results/${briefId}` : '/chat';
 
   return (
     <Section>
@@ -57,17 +48,6 @@ export function CustomerProductPage() {
               <Link to={backTo}>
                 <ArrowLeft /> Back
               </Link>
-            </Button>
-            <Button
-              variant={saved ? 'outline' : 'dark'}
-              onClick={() =>
-                saved
-                  ? removeFromCatalog(product.id)
-                  : addToCatalog(product.id, briefId)
-              }
-            >
-              {saved ? <BookmarkCheck /> : <Bookmark />}
-              {saved ? 'In your catalog' : 'Save to catalog'}
             </Button>
             <Button onClick={() => setSampleProduct(product)}>Order sample</Button>
           </>
@@ -144,24 +124,9 @@ export function CustomerProductPage() {
 
         <div className="h-fit rounded-card border border-hairline bg-surface p-5">
           <p className="text-[13px] leading-relaxed text-ink-soft">
-            Manufacturer details are handled by Labtree. Save the product to your catalog or order a
-            sample to evaluate it physically.
+            Manufacturer details are handled by Labtree. Order a sample to evaluate the product
+            physically — status appears under Orders.
           </p>
-          {saved && (
-            <Button
-              className="mt-4 w-full"
-              variant="ghost"
-              size="sm"
-              onClick={() => removeFromCatalog(product.id)}
-            >
-              Remove from catalog
-            </Button>
-          )}
-          {!accountId && (
-            <Button className="mt-4 w-full" onClick={() => navigate('/login')}>
-              Sign in to save
-            </Button>
-          )}
         </div>
       </div>
 

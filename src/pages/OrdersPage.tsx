@@ -21,18 +21,12 @@ export function OrdersPage() {
   return (
     <Section>
       <PageHeader
-        index="04 / Orders"
         title="Your orders"
-        description="Sample order status only — products you want to keep live in Catalog. Status changes are made by the Labtree team and appear here immediately."
+        description="Sample order status. Changes made by the Labtree team appear here immediately."
         actions={
-          <>
-            <Button variant="outline" asChild>
-              <Link to="/catalog">Open catalog</Link>
-            </Button>
-            <Button variant="outline" asChild>
-              <Link to="/chat">New brief</Link>
-            </Button>
-          </>
+          <Button variant="outline" asChild>
+            <Link to="/chat">New brief</Link>
+          </Button>
         }
       />
 
@@ -41,17 +35,11 @@ export function OrdersPage() {
           <PackageOpen className="mx-auto size-6 text-muted" />
           <p className="mt-3 text-[15px] font-medium">No orders yet</p>
           <p className="mt-1 text-[13px] text-muted">
-            Save products to your catalog from a brief, then order a sample when you want physical
-            evaluation.
+            Order a sample from a brief match list to track shipping status here.
           </p>
-          <div className="mt-5 flex flex-wrap justify-center gap-2">
-            <Button variant="outline" asChild>
-              <Link to="/catalog">Go to catalog</Link>
-            </Button>
-            <Button asChild>
-              <Link to="/chat">Start a brief</Link>
-            </Button>
-          </div>
+          <Button className="mt-5" asChild>
+            <Link to="/chat">Start a brief</Link>
+          </Button>
         </div>
       ) : (
         <div className="mt-8 flex flex-col gap-4">

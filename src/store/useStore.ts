@@ -531,7 +531,7 @@ export const useStore = create<DemoState>()(
           ),
           orders: state.orders,
         });
-        get().logActivity('brief', `Brief ${id} deleted (catalog and orders kept)`);
+        get().logActivity('brief', `Brief ${id} deleted (orders kept)`);
       },
 
       setActiveBrief: (activeBriefId) => set({ activeBriefId }),

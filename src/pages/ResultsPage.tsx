@@ -141,7 +141,6 @@ export function ResultsPage() {
                 rank={index + 1}
                 briefId={brief.id}
                 onOrderSample={isCustomer ? setSampleProduct : undefined}
-                showCatalogActions={isCustomer}
               />
             );
           })}

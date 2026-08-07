@@ -540,9 +540,7 @@ export function ChatPage() {
                       title="Delete brief"
                       onClick={() => {
                         if (
-                          confirm(
-                            `Delete brief ${item.id}? Saved catalog products and sample orders will be kept.`,
-                          )
+                          confirm(`Delete brief ${item.id}? Sample orders will be kept.`)
                         ) {
                           deleteBrief(item.id);
                         }
