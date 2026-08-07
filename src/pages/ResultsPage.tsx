@@ -83,7 +83,7 @@ export function ResultsPage() {
         description={
           results.length
             ? 'Ranked by weighted match score. The breakdown next to each product shows exactly which criteria are met and where a compromise would be required.'
-            : 'The catalog holds nothing that satisfies the hard criteria of this brief. Labtree’s sourcing team can request offers from manufacturers on your behalf.'
+            : 'The catalog holds nothing that satisfies the hard criteria of this brief. Decide whether to refine the brief or ask Labtree to source.'
         }
         actions={
           isCustomer ? (
@@ -192,11 +192,11 @@ export function ResultsPage() {
               Next step
             </span>
             <h3 className="mt-2 text-xl font-semibold display-tight">
-              {isCustomer ? 'Ask Labtree to source' : 'Run manufacturer sourcing'}
+              {isCustomer ? 'Choose how to continue' : 'Run manufacturer sourcing'}
             </h3>
             <p className="mt-2 text-[13px] leading-relaxed text-paper/70">
               {isCustomer
-                ? 'Our team selects suitable manufacturers, sends a standardised RFQ and reviews offers before anything appears in your catalog. You never contact suppliers directly.'
+                ? 'Nothing matches yet. Refine the brief to search the catalog again, or ask Labtree to source from manufacturers — only if you choose to.'
                 : 'Select manufacturers, send the standardised RFQ with personal form links, review drafts and publish.'}
             </p>
             {isCustomer ? (
@@ -207,9 +207,19 @@ export function ResultsPage() {
                   published match is available.
                 </div>
               ) : (
-                <Button className="mt-5 w-full" onClick={askLabtree}>
-                  Request sourcing
-                </Button>
+                <div className="mt-5 flex flex-col gap-2">
+                  <Button className="w-full" onClick={askLabtree}>
+                    Request sourcing
+                  </Button>
+                  <Button className="w-full" variant="outline" asChild>
+                    <Link
+                      to="/chat"
+                      className="border-paper/25 bg-transparent text-paper hover:bg-paper/10 hover:text-paper"
+                    >
+                      Refine brief
+                    </Link>
+                  </Button>
+                </div>
               )
             ) : (
               <Button className="mt-5 w-full" asChild>

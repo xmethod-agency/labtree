@@ -555,11 +555,12 @@ export const useStore = create<DemoState>()(
               ? {
                   ...b,
                   matchIds,
-                  status: matchIds.length
-                    ? 'matched'
-                    : b.status === 'sourcing' || b.status === 'sourcing_requested'
+                  // Keep an existing sourcing workflow; otherwise stay on matched so the
+                  // customer can choose to refine the brief or request sourcing manually.
+                  status:
+                    b.status === 'sourcing' || b.status === 'sourcing_requested'
                       ? b.status
-                      : 'sourcing_requested',
+                      : 'matched',
                 }
               : b,
           ),
@@ -568,7 +569,7 @@ export const useStore = create<DemoState>()(
           'match',
           matchIds.length
             ? `Brief ${briefId}: ${matchIds.length} matches found`
-            : `Brief ${briefId}: no catalog match — sourcing required`,
+            : `Brief ${briefId}: no catalog match — awaiting customer decision`,
         );
         return matchIds;
       },

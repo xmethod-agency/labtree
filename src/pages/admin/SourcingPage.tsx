@@ -17,9 +17,7 @@ export function SourcingPage() {
   const openCases = briefs.filter(
     (b) =>
       !threads.some((t) => t.briefId === b.id) &&
-      (b.status === 'sourcing_requested' ||
-        b.status === 'sourcing' ||
-        (b.matchIds.length === 0 && b.status !== 'draft' && b.status !== 'completed')),
+      (b.status === 'sourcing_requested' || b.status === 'sourcing'),
   );
 
   return (
