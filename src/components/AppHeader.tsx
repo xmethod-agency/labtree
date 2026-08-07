@@ -14,7 +14,8 @@ interface NavItem {
 
 const CUSTOMER_NAV: NavItem[] = [
   { to: '/chat', label: 'Briefing' },
-  { to: '/orders', label: 'Samples' },
+  { to: '/catalog', label: 'Catalog' },
+  { to: '/orders', label: 'Orders' },
 ];
 
 const ADMIN_NAV: NavItem[] = [

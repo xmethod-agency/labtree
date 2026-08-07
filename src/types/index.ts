@@ -161,12 +161,23 @@ export interface SampleOrder {
   id: string;
   briefId: string;
   productId: string;
+  /** Owning customer account. */
+  accountId: string;
   customerName: string;
   shippingAddress: ShippingAddress;
   status: SampleOrderStatus;
   trackingNumber: string | null;
   createdAt: string;
   statusHistory: { status: SampleOrderStatus; timestamp: string }[];
+}
+
+/** Product saved by a customer into their personal catalog. */
+export interface SavedProduct {
+  id: string;
+  accountId: string;
+  productId: string;
+  briefId: string | null;
+  savedAt: string;
 }
 
 export type ThreadStatus =

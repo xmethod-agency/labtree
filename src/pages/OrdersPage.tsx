@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { Check, PackageOpen } from 'lucide-react';
 import type { SampleOrderStatus } from '@/types';
-import { useStore } from '@/store/useStore';
+import { useStore, selectCurrentAccount } from '@/store/useStore';
 import { PageHeader, Section, DataCell } from '@/components/PageHeader';
 import { OrderStatusBadge, ORDER_STATUS_LABEL } from '@/components/StatusBadge';
 import { Button } from '@/components/ui/button';
@@ -11,32 +11,47 @@ import { cn, formatDate } from '@/lib/utils';
 const FLOW: SampleOrderStatus[] = ['requested', 'label_created', 'shipped', 'delivered'];
 
 export function OrdersPage() {
-  const orders = useStore((s) => s.orders);
+  const account = useStore(selectCurrentAccount);
+  const allOrders = useStore((s) => s.orders);
   const products = useStore((s) => s.products);
+  const orders = allOrders.filter(
+    (o) => !account || o.accountId === account.id || (!o.accountId && o.customerName === account.name),
+  );
 
   return (
     <Section>
       <PageHeader
-        index="03 / Samples"
-        title="Your sample orders"
-        description="Every sample request and its current shipping status. Status changes are made by the Labtree team and appear here immediately."
+        index="04 / Orders"
+        title="Your orders"
+        description="Sample order status only — products you want to keep live in Catalog. Status changes are made by the Labtree team and appear here immediately."
         actions={
-          <Button variant="outline" asChild>
-            <Link to="/chat">New brief</Link>
-          </Button>
+          <>
+            <Button variant="outline" asChild>
+              <Link to="/catalog">Open catalog</Link>
+            </Button>
+            <Button variant="outline" asChild>
+              <Link to="/chat">New brief</Link>
+            </Button>
+          </>
         }
       />
 
       {orders.length === 0 ? (
         <div className="mt-8 rounded-card border border-hairline bg-surface p-10 text-center">
           <PackageOpen className="mx-auto size-6 text-muted" />
-          <p className="mt-3 text-[15px] font-medium">No sample orders yet</p>
+          <p className="mt-3 text-[15px] font-medium">No orders yet</p>
           <p className="mt-1 text-[13px] text-muted">
-            Order a sample from a match list and it will show up here with its shipping status.
+            Save products to your catalog from a brief, then order a sample when you want physical
+            evaluation.
           </p>
-          <Button className="mt-5" asChild>
-            <Link to="/chat">Start a brief</Link>
-          </Button>
+          <div className="mt-5 flex flex-wrap justify-center gap-2">
+            <Button variant="outline" asChild>
+              <Link to="/catalog">Go to catalog</Link>
+            </Button>
+            <Button asChild>
+              <Link to="/chat">Start a brief</Link>
+            </Button>
+          </div>
         </div>
       ) : (
         <div className="mt-8 flex flex-col gap-4">
@@ -80,40 +95,43 @@ export function OrdersPage() {
                 <ol className="mt-6 grid gap-3 sm:grid-cols-4">
                   {FLOW.map((status, index) => {
                     const done = index <= currentIndex;
-                    const entry = order.statusHistory.find((h) => h.status === status);
+                    const current = index === currentIndex;
                     return (
-                      <li key={status} className="flex items-start gap-2">
-                        <span
-                          className={cn(
-                            'mt-0.5 grid size-4 shrink-0 place-items-center rounded-full border',
-                            done ? 'border-ink bg-ink text-lime' : 'border-hairline',
-                          )}
-                        >
-                          {done && <Check className="size-2.5" />}
-                        </span>
-                        <span>
+                      <li
+                        key={status}
+                        className={cn(
+                          'rounded-2xl border px-3 py-3',
+                          current
+                            ? 'border-ink bg-surface'
+                            : done
+                              ? 'border-hairline bg-paper'
+                              : 'border-hairline bg-surface/40',
+                        )}
+                      >
+                        <div className="flex items-center gap-2">
                           <span
                             className={cn(
-                              'block text-[12px] font-medium',
-                              done ? 'text-ink' : 'text-muted',
+                              'grid size-5 place-items-center rounded-full border text-[10px]',
+                              done
+                                ? 'border-ink bg-ink text-lime'
+                                : 'border-hairline text-muted',
+                            )}
+                          >
+                            {done ? <Check className="size-3" /> : index + 1}
+                          </span>
+                          <span
+                            className={cn(
+                              'text-[12px]',
+                              current ? 'font-medium text-ink' : 'text-muted',
                             )}
                           >
                             {ORDER_STATUS_LABEL[status]}
                           </span>
-                          <span className="num block text-[10px] text-muted">
-                            {entry ? formatDate(entry.timestamp) : '—'}
-                          </span>
-                        </span>
+                        </div>
                       </li>
                     );
                   })}
                 </ol>
-
-                <p className="mt-5 rounded-2xl bg-surface p-4 text-[12px] text-muted">
-                  Shipping address: {order.shippingAddress.company}, {order.shippingAddress.street},{' '}
-                  {order.shippingAddress.zip} {order.shippingAddress.city},{' '}
-                  {order.shippingAddress.country}
-                </p>
               </div>
             );
           })}

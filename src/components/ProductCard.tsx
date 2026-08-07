@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { ChevronDown, ChevronUp } from 'lucide-react';
+import { Bookmark, BookmarkCheck, ChevronDown, ChevronUp } from 'lucide-react';
 import type { MatchResult, Product } from '@/types';
 import { CERTIFICATION_LABEL, LABEL_TYPE_LABEL } from '@/data/products';
 import { supplierAlias, supplierById } from '@/data/suppliers';
-import { useStore } from '@/store/useStore';
+import { useStore, selectIsSaved } from '@/store/useStore';
 import { MatchScore } from '@/components/MatchScore';
 import { Button } from '@/components/ui/button';
 import { DataCell } from '@/components/PageHeader';
@@ -14,15 +14,29 @@ interface ProductCardProps {
   product: Product;
   result?: MatchResult;
   rank?: number;
+  briefId?: string | null;
   onOrderSample?: (product: Product) => void;
+  /** Show add/remove personal catalog controls for customers. */
+  showCatalogActions?: boolean;
   footer?: React.ReactNode;
 }
 
-export function ProductCard({ product, result, rank, onOrderSample, footer }: ProductCardProps) {
+export function ProductCard({
+  product,
+  result,
+  rank,
+  briefId,
+  onOrderSample,
+  showCatalogActions = false,
+  footer,
+}: ProductCardProps) {
   const [showInci, setShowInci] = useState(false);
   const role = useStore((s) => s.role);
   const revealSupplierNames = useStore((s) => s.revealSupplierNames);
   const toggleSupplierNames = useStore((s) => s.toggleSupplierNames);
+  const addToCatalog = useStore((s) => s.addToCatalog);
+  const removeFromCatalog = useStore((s) => s.removeFromCatalog);
+  const saved = useStore(selectIsSaved(product.id));
   const supplier = supplierById(product.supplierId);
   const isAdmin = role === 'admin';
   const canSeeName = isAdmin && revealSupplierNames;
@@ -145,7 +159,23 @@ export function ProductCard({ product, result, rank, onOrderSample, footer }: Pr
           )}
 
           <div className="mt-auto flex flex-col gap-2">
+            {showCatalogActions && role === 'customer' && (
+              <Button
+                variant={saved ? 'outline' : 'dark'}
+                onClick={() =>
+                  saved ? removeFromCatalog(product.id) : addToCatalog(product.id, briefId)
+                }
+              >
+                {saved ? <BookmarkCheck /> : <Bookmark />}
+                {saved ? 'In your catalog' : 'Save to catalog'}
+              </Button>
+            )}
             {onOrderSample && <Button onClick={() => onOrderSample(product)}>Order sample</Button>}
+            {showCatalogActions && role === 'customer' && saved && (
+              <Button variant="ghost" size="sm" onClick={() => removeFromCatalog(product.id)}>
+                Remove from catalog
+              </Button>
+            )}
             {footer}
           </div>
         </div>

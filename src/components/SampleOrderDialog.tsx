@@ -106,8 +106,8 @@ export function SampleOrderDialog({ product, briefId, onClose }: SampleOrderDial
               <span className="text-sm text-muted">{product.name}</span>
             </div>
             <p className="text-sm text-ink-soft">
-              Your sample will be dispatched within 2 working days to {address.city}. You can track
-              the status under Samples — the order is already in the agency queue.
+              Your sample will be dispatched within 2 working days to {address.city}. Track the
+              status under Orders — the request is already in the agency queue.
             </p>
             <DialogFooter className="w-full">
               <Button variant="outline" onClick={onClose}>
@@ -115,7 +115,7 @@ export function SampleOrderDialog({ product, briefId, onClose }: SampleOrderDial
               </Button>
               <Button asChild>
                 <Link to="/orders" onClick={onClose}>
-                  Go to samples
+                  Go to orders
                 </Link>
               </Button>
             </DialogFooter>

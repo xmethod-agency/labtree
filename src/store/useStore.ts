@@ -12,6 +12,7 @@ import type {
   Role,
   SampleOrder,
   SampleOrderStatus,
+  SavedProduct,
   ShippingAddress,
   SupplierFormSubmission,
 } from '@/types';
@@ -172,6 +173,7 @@ const SEED_ORDERS: SampleOrder[] = [
     id: 'SO-2026-0086',
     briefId: 'BR-2026-0143',
     productId: 'KWR-FC-0442',
+    accountId: DEFAULT_ACCOUNT_ID,
     customerName: customer.name,
     shippingAddress: customer.address,
     status: 'shipped',
@@ -182,6 +184,16 @@ const SEED_ORDERS: SampleOrder[] = [
       { status: 'label_created', timestamp: '2026-07-29T11:05:00.000Z' },
       { status: 'shipped', timestamp: '2026-07-30T07:40:00.000Z' },
     ],
+  },
+];
+
+const SEED_SAVED: SavedProduct[] = [
+  {
+    id: 'sv-seed-1',
+    accountId: DEFAULT_ACCOUNT_ID,
+    productId: 'KWR-FC-0442',
+    briefId: 'BR-2026-0143',
+    savedAt: '2026-07-28T11:00:00.000Z',
   },
 ];
 
@@ -222,6 +234,7 @@ interface DemoState {
   askedIds: Record<string, string[]>;
   threads: EmailThread[];
   orders: SampleOrder[];
+  savedProducts: SavedProduct[];
   activity: ActivityItem[];
   counters: { brief: number; order: number };
   activeBriefId: string | null;
@@ -249,6 +262,8 @@ interface DemoState {
   requestSourcing: (briefId: string) => void;
 
   updateProduct: (id: string, patch: Partial<Product>) => void;
+  addToCatalog: (productId: string, briefId?: string | null) => boolean;
+  removeFromCatalog: (productId: string) => void;
   createOrder: (briefId: string, productId: string, address: ShippingAddress) => string;
   advanceOrder: (orderId: string) => void;
 
@@ -287,6 +302,7 @@ const initialState = {
   askedIds: {} as Record<string, string[]>,
   threads: [] as EmailThread[],
   orders: SEED_ORDERS,
+  savedProducts: SEED_SAVED,
   activity: SEED_ACTIVITY,
   counters: { brief: 147, order: 87 },
   activeBriefId: null as string | null,
@@ -557,13 +573,49 @@ export const useStore = create<DemoState>()(
         get().logActivity('catalog', `${id} updated in the catalog`);
       },
 
+      addToCatalog: (productId, briefId = null) => {
+        const account = currentAccount(get());
+        if (!account || account.role !== 'customer') return false;
+        const product = get().products.find(
+          (p) => p.id === productId && p.publishStatus === 'published',
+        );
+        if (!product) return false;
+        const already = get().savedProducts.some(
+          (s) => s.accountId === account.id && s.productId === productId,
+        );
+        if (already) return false;
+        const item: SavedProduct = {
+          id: uid('sv'),
+          accountId: account.id,
+          productId,
+          briefId: briefId ?? null,
+          savedAt: now(),
+        };
+        set((s) => ({ savedProducts: [item, ...s.savedProducts] }));
+        get().logActivity('catalog', `${account.name} saved ${productId} to personal catalog`);
+        return true;
+      },
+
+      removeFromCatalog: (productId) => {
+        const account = currentAccount(get());
+        if (!account) return;
+        set((s) => ({
+          savedProducts: s.savedProducts.filter(
+            (item) => !(item.accountId === account.id && item.productId === productId),
+          ),
+        }));
+        get().logActivity('catalog', `${account.name} removed ${productId} from personal catalog`);
+      },
+
       createOrder: (briefId, productId, address) => {
+        const account = currentAccount(get());
         const next = get().counters.order + 1;
         const id = `SO-2026-${String(next).padStart(4, '0')}`;
         const order: SampleOrder = {
           id,
           briefId,
           productId,
+          accountId: account?.id ?? '',
           customerName: address.name,
           shippingAddress: address,
           status: 'requested',
@@ -1000,8 +1052,8 @@ export const useStore = create<DemoState>()(
       },
     }),
     {
-      name: 'labtree-demo-v2',
-      version: 2,
+      name: 'labtree-demo-v3',
+      version: 3,
       partialize: (state) => ({
         accounts: state.accounts,
         currentAccountId: state.currentAccountId,
@@ -1015,6 +1067,7 @@ export const useStore = create<DemoState>()(
         askedIds: state.askedIds,
         threads: state.threads,
         orders: state.orders,
+        savedProducts: state.savedProducts,
         activity: state.activity,
         counters: state.counters,
         activeBriefId: state.activeBriefId,
@@ -1031,3 +1084,13 @@ export const selectCurrentAccount = (s: DemoState) =>
   s.accounts.find((a) => a.id === s.currentAccountId) ?? null;
 export const selectPublishedProducts = (s: DemoState) =>
   s.products.filter((p) => p.publishStatus === 'published');
+
+export const selectMySavedProducts = (s: DemoState) =>
+  s.savedProducts.filter((item) => item.accountId === s.currentAccountId);
+
+export const selectIsSaved =
+  (productId: string) =>
+  (s: DemoState) =>
+    s.savedProducts.some(
+      (item) => item.accountId === s.currentAccountId && item.productId === productId,
+    );
