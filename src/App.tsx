@@ -8,6 +8,7 @@ import { ChatPage } from '@/pages/ChatPage';
 import { ResultsPage } from '@/pages/ResultsPage';
 import { OrdersPage } from '@/pages/OrdersPage';
 import { CustomerCatalogPage } from '@/pages/CustomerCatalogPage';
+import { CustomerProductPage } from '@/pages/CustomerProductPage';
 import { DashboardPage } from '@/pages/admin/DashboardPage';
 import { BriefsPage } from '@/pages/admin/BriefsPage';
 import { BriefDetailPage } from '@/pages/admin/BriefDetailPage';
@@ -69,6 +70,14 @@ export default function App() {
             element={
               <RequireAuth role="customer">
                 <CustomerCatalogPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/products/:productId"
+            element={
+              <RequireAuth role="customer">
+                <CustomerProductPage />
               </RequireAuth>
             }
           />

@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 
 interface PageHeaderProps {
+  /** @deprecated Unused — kept optional so call sites stay compatible. */
   index?: string;
   title: string;
   description?: string;
@@ -9,19 +10,11 @@ interface PageHeaderProps {
   className?: string;
 }
 
-/** Section heading in the labtree.de manner: superscript index, then a tight display line. */
-export function PageHeader({ index, title, description, actions, className }: PageHeaderProps) {
+export function PageHeader({ title, description, actions, className }: PageHeaderProps) {
   return (
     <div className={cn('flex flex-wrap items-end justify-between gap-6', className)}>
       <div className="max-w-3xl">
-        <h1 className="text-[32px] font-semibold display-tight lg:text-[46px]">
-          {index && (
-            <sup className="num mr-2.5 align-super text-[12px] font-normal tracking-[0.08em] text-muted lg:text-[13px]">
-              {index}
-            </sup>
-          )}
-          {title}
-        </h1>
+        <h1 className="text-[32px] font-semibold display-tight lg:text-[46px]">{title}</h1>
         {description && (
           <p className="mt-3 max-w-2xl text-[14px] leading-relaxed text-muted lg:text-[15px]">
             {description}

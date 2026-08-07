@@ -48,7 +48,6 @@ export function ProductDetailPage() {
   return (
     <Section>
       <PageHeader
-        index={`Admin / ${product.id}`}
         title={product.name}
         description={`${product.category} / ${product.subCategory} · ${product.applicationArea.join(', ')}`}
         actions={

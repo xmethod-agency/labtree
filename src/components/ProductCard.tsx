@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Bookmark, BookmarkCheck, ChevronDown, ChevronUp } from 'lucide-react';
 import type { MatchResult, Product } from '@/types';
 import { CERTIFICATION_LABEL, LABEL_TYPE_LABEL } from '@/data/products';
@@ -94,7 +95,23 @@ export function ProductCard({
             ) : null}
           </div>
 
-          <h3 className="mt-1.5 text-[22px] font-semibold display-tight">{product.name}</h3>
+          <h3 className="mt-1.5 text-[22px] font-semibold display-tight">
+            {role === 'customer' ? (
+              <Link
+                to={`/products/${product.id}${briefId ? `?brief=${briefId}` : ''}`}
+                className="transition-colors hover:text-ink-soft"
+              >
+                {product.name}
+              </Link>
+            ) : (
+              <Link
+                to={`/admin/catalog/${product.id}`}
+                className="transition-colors hover:text-ink-soft"
+              >
+                {product.name}
+              </Link>
+            )}
+          </h3>
           <p className="mt-1 text-[13px] text-muted">
             {product.category} · {product.subCategory} · {product.applicationArea.join(', ')}
           </p>
@@ -164,6 +181,13 @@ export function ProductCard({
           )}
 
           <div className="mt-auto flex flex-col gap-2">
+            {role === 'customer' && (
+              <Button variant="outline" asChild>
+                <Link to={`/products/${product.id}${briefId ? `?brief=${briefId}` : ''}`}>
+                  Open product
+                </Link>
+              </Button>
+            )}
             {showCatalogActions && role === 'customer' && (
               <Button
                 variant={saved ? 'outline' : 'dark'}

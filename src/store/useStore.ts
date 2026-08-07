@@ -255,6 +255,7 @@ interface DemoState {
 
   createBrief: (inputMethod: Brief['inputMethod'], raw: string) => string;
   updateBrief: (id: string, patch: Partial<Brief>) => void;
+  deleteBrief: (id: string) => void;
   setActiveBrief: (id: string | null) => void;
   appendChat: (briefId: string, message: ChatMessage) => void;
   markAsked: (briefId: string, questionId: string) => void;
@@ -506,6 +507,26 @@ export const useStore = create<DemoState>()(
         set((s) => ({
           briefs: s.briefs.map((b) => (b.id === id ? { ...b, ...patch } : b)),
         })),
+
+      deleteBrief: (id) => {
+        const state = get();
+        const { [id]: _chat, ...restChats } = state.chats;
+        const { [id]: _asked, ...restAsked } = state.askedIds;
+        void _chat;
+        void _asked;
+        const remaining = state.briefs.filter((b) => b.id !== id);
+        const nextActive =
+          state.activeBriefId === id
+            ? remaining.find((b) => b.accountId === state.currentAccountId)?.id ?? null
+            : state.activeBriefId;
+        set({
+          briefs: remaining,
+          chats: restChats,
+          askedIds: restAsked,
+          activeBriefId: nextActive,
+        });
+        get().logActivity('brief', `Brief ${id} deleted`);
+      },
 
       setActiveBrief: (activeBriefId) => set({ activeBriefId }),
 
