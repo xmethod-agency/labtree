@@ -519,13 +519,19 @@ export const useStore = create<DemoState>()(
           state.activeBriefId === id
             ? remaining.find((b) => b.accountId === state.currentAccountId)?.id ?? null
             : state.activeBriefId;
+        // Catalog saves and sample orders are account-owned and must survive brief deletion.
+        // Only detach the optional brief reference on saved products.
         set({
           briefs: remaining,
           chats: restChats,
           askedIds: restAsked,
           activeBriefId: nextActive,
+          savedProducts: state.savedProducts.map((item) =>
+            item.briefId === id ? { ...item, briefId: null } : item,
+          ),
+          orders: state.orders,
         });
-        get().logActivity('brief', `Brief ${id} deleted`);
+        get().logActivity('brief', `Brief ${id} deleted (catalog and orders kept)`);
       },
 
       setActiveBrief: (activeBriefId) => set({ activeBriefId }),

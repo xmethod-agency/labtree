@@ -539,7 +539,13 @@ export function ChatPage() {
                       variant="ghost"
                       title="Delete brief"
                       onClick={() => {
-                        if (confirm(`Delete brief ${item.id}?`)) deleteBrief(item.id);
+                        if (
+                          confirm(
+                            `Delete brief ${item.id}? Saved catalog products and sample orders will be kept.`,
+                          )
+                        ) {
+                          deleteBrief(item.id);
+                        }
                       }}
                     >
                       <Trash2 />

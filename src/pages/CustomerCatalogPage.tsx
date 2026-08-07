@@ -13,6 +13,7 @@ export function CustomerCatalogPage() {
   const account = useStore(selectCurrentAccount);
   const accountId = useStore((s) => s.currentAccountId);
   const savedProducts = useStore((s) => s.savedProducts);
+  const briefs = useStore((s) => s.briefs);
   const products = useStore((s) => s.products);
   const [sampleProduct, setSampleProduct] = useState<Product | null>(null);
 
@@ -68,7 +69,7 @@ export function CustomerCatalogPage() {
             <div key={entry.id}>
               <p className="mb-2 text-[11px] text-muted">
                 Saved {formatDate(entry.savedAt)}
-                {entry.briefId ? (
+                {entry.briefId && briefs.some((b) => b.id === entry.briefId) ? (
                   <>
                     {' '}
                     · from brief{' '}
