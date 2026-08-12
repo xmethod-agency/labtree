@@ -1,4 +1,5 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
+import { AppFooter } from '@/components/AppFooter';
 import { AppHeader } from '@/components/AppHeader';
 import { useStore, selectCurrentAccount } from '@/store/useStore';
 import { LoginPage } from '@/pages/LoginPage';
@@ -157,6 +158,7 @@ export default function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
+      <AppFooter />
     </div>
   );
 }
