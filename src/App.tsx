@@ -1,4 +1,5 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
+import { AppFooter } from '@/components/AppFooter';
 import { AppHeader } from '@/components/AppHeader';
 import { useStore } from '@/store/useStore';
 import { ChatPage } from '@/pages/ChatPage';
@@ -109,6 +110,7 @@ export default function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
+      <AppFooter />
     </div>
   );
 }
