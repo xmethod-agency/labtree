@@ -22,10 +22,12 @@ export function AppFooter() {
           href="https://xmethod.de"
           target="_blank"
           rel="noopener noreferrer"
-          className="flex items-center gap-2 text-muted/80 transition-colors hover:text-ink"
+          className="group flex items-center gap-2"
         >
-          <span className="font-credit text-[11px]">Designed &amp; Developed by</span>
-          <XmethodMark className="h-3.5 w-auto" />
+          <span className="font-credit text-[11px] text-muted transition-colors group-hover:text-ink">
+            Designed &amp; Developed by
+          </span>
+          <XmethodMark className="h-3.5 w-auto text-ink-soft transition-colors group-hover:text-ink" />
         </a>
       </div>
     </footer>
