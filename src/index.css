@@ -3,6 +3,8 @@
 @theme {
   --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  /* Body face of mi-era.org, used only for the Xmethod credit line */
+  --font-credit: 'Lexend', 'Inter', ui-sans-serif, system-ui, sans-serif;
 
   /* Palette lifted from labtree.de */
   --color-ink: #2b2b2b;
