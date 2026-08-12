@@ -1,14 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { ArrowUp, Check, FileText, Loader2, Paperclip, Plus } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import { ArrowUp, Check, FileText, Loader2, Paperclip, Plus, Trash2 } from 'lucide-react';
 import type { BriefField, ChatMessage } from '@/types';
 import { PDF_BRIEF, SEARCH_STEPS, STARTER_PROMPTS, type QuickReply } from '@/data/scenarios';
-import { useStore } from '@/store/useStore';
+import { useStore, selectCurrentAccount } from '@/store/useStore';
 import { getProvider } from '@/lib/ai';
 import { BriefDataPanel } from '@/components/BriefDataPanel';
 import { PageHeader, Section } from '@/components/PageHeader';
+import { BriefStatusBadge } from '@/components/StatusBadge';
 import { Button } from '@/components/ui/button';
-import { cn, sleep, uid } from '@/lib/utils';
+import { cn, formatDate, sleep, uid } from '@/lib/utils';
 
 const prefersReducedMotion = () =>
   window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -102,6 +103,7 @@ function SearchSequence({ step }: { step: number }) {
 
 export function ChatPage() {
   const navigate = useNavigate();
+  const account = useStore(selectCurrentAccount);
   const briefs = useStore((s) => s.briefs);
   const chats = useStore((s) => s.chats);
   const askedIdsMap = useStore((s) => s.askedIds);
@@ -110,10 +112,19 @@ export function ChatPage() {
 
   const createBrief = useStore((s) => s.createBrief);
   const setActiveBrief = useStore((s) => s.setActiveBrief);
+  const deleteBrief = useStore((s) => s.deleteBrief);
   const updateBrief = useStore((s) => s.updateBrief);
   const appendChat = useStore((s) => s.appendChat);
   const markAsked = useStore((s) => s.markAsked);
   const runMatch = useStore((s) => s.runMatch);
+
+  const myBriefs = useMemo(
+    () =>
+      briefs
+        .filter((b) => b.accountId === account?.id)
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+    [briefs, account?.id],
+  );
 
   const [input, setInput] = useState('');
   const [typing, setTyping] = useState(false);
@@ -134,12 +145,17 @@ export function ChatPage() {
 
   useEffect(() => {
     const state = useStore.getState();
+    const accountId = state.currentAccountId;
     const active = state.briefs.find((b) => b.id === state.activeBriefId);
-    if (active && active.status === 'draft') return;
-    const draft = state.briefs.find((b) => b.status === 'draft');
+    if (active && active.accountId === accountId) return;
+    const mine = state.briefs
+      .filter((b) => b.accountId === accountId)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    const draft = mine.find((b) => b.status === 'draft');
     if (draft) setActiveBrief(draft.id);
+    else if (mine[0]) setActiveBrief(mine[0].id);
     else createBrief('chat', '');
-  }, [createBrief, setActiveBrief]);
+  }, [account?.id, createBrief, setActiveBrief]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
@@ -270,12 +286,19 @@ export function ChatPage() {
     setStream(null);
   }
 
+  function openBriefInChat(id: string) {
+    setActiveBrief(id);
+    setQuickReplies([]);
+    setSelected([]);
+    setStream(null);
+  }
+
   const showStarters = messages.length === 0 && !typing && !stream;
+  const greetingName = account?.name?.split(' ')[0] ?? 'there';
 
   return (
     <Section>
       <PageHeader
-        index="01 / Briefing"
         title="AI briefing"
         description="Describe the product in your own words or upload an RFQ. The assistant asks back only what is missing and turns the conversation into a structured brief."
         actions={
@@ -297,8 +320,8 @@ export function ChatPage() {
                 <div className="flex gap-3">
                   <Avatar role="assistant" />
                   <div className="max-w-[85%] rounded-3xl bg-surface px-4 py-3 text-[14px] leading-relaxed">
-                    Good afternoon, Ms Brandt. Which product would you like to develop? A sentence is
-                    enough — I will ask for the rest.
+                    Good afternoon, {greetingName}. Which product would you like to develop? A
+                    sentence is enough — I will ask for the rest.
                   </div>
                 </div>
                 <div className="ml-10 flex max-w-2xl flex-col">
@@ -448,6 +471,88 @@ export function ChatPage() {
             recentFields={recentFields}
             className="h-fit lg:sticky lg:top-20"
           />
+        )}
+      </div>
+
+      <div className="mt-10 rounded-card border border-hairline bg-paper">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-hairline px-5 py-4">
+          <div>
+            <h2 className="text-[15px] font-semibold display-tight">Brief history</h2>
+            <p className="text-[12px] text-muted">
+              Reopen a previous brief or remove ones you no longer need.
+            </p>
+          </div>
+          <Button size="sm" variant="outline" onClick={startNewBrief}>
+            <Plus /> New brief
+          </Button>
+        </div>
+        {myBriefs.length === 0 ? (
+          <p className="px-5 py-8 text-[13px] text-muted">No briefs yet for this account.</p>
+        ) : (
+          <ul className="divide-y divide-hairline">
+            {myBriefs.map((item) => {
+              const isActive = item.id === activeBriefId;
+              const summary = [
+                item.category,
+                item.subCategory,
+                item.volumeMl ? `${item.volumeMl} ml` : null,
+              ]
+                .filter(Boolean)
+                .join(' · ');
+              return (
+                <li
+                  key={item.id}
+                  className={cn(
+                    'flex flex-wrap items-center gap-3 px-5 py-4',
+                    isActive && 'bg-surface',
+                  )}
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="num text-[12px] text-muted">{item.id}</span>
+                      <BriefStatusBadge status={item.status} />
+                      {isActive && <span className="text-[11px] text-muted">current</span>}
+                    </div>
+                    <p className="mt-1 text-[14px] font-medium">
+                      {summary || item.raw.slice(0, 72) || 'Empty draft'}
+                    </p>
+                    <p className="text-[12px] text-muted">{formatDate(item.createdAt)}</p>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {(item.status === 'matched' ||
+                      item.status === 'sourcing_requested' ||
+                      item.status === 'sourcing' ||
+                      item.status === 'completed') && (
+                      <Button size="sm" variant="outline" asChild>
+                        <Link to={`/results/${item.id}`}>Results</Link>
+                      </Button>
+                    )}
+                    <Button
+                      size="sm"
+                      variant={isActive ? 'soft' : 'outline'}
+                      onClick={() => openBriefInChat(item.id)}
+                    >
+                      {isActive ? 'Active in chat' : 'Open in chat'}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      title="Delete brief"
+                      onClick={() => {
+                        if (
+                          confirm(`Delete brief ${item.id}? Sample orders will be kept.`)
+                        ) {
+                          deleteBrief(item.id);
+                        }
+                      }}
+                    >
+                      <Trash2 />
+                    </Button>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
         )}
       </div>
     </Section>

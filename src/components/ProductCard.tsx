@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import type { MatchResult, Product } from '@/types';
 import { CERTIFICATION_LABEL, LABEL_TYPE_LABEL } from '@/data/products';
@@ -14,17 +15,26 @@ interface ProductCardProps {
   product: Product;
   result?: MatchResult;
   rank?: number;
+  briefId?: string | null;
   onOrderSample?: (product: Product) => void;
   footer?: React.ReactNode;
 }
 
-export function ProductCard({ product, result, rank, onOrderSample, footer }: ProductCardProps) {
+export function ProductCard({
+  product,
+  result,
+  rank,
+  briefId,
+  onOrderSample,
+  footer,
+}: ProductCardProps) {
   const [showInci, setShowInci] = useState(false);
   const role = useStore((s) => s.role);
   const revealSupplierNames = useStore((s) => s.revealSupplierNames);
   const toggleSupplierNames = useStore((s) => s.toggleSupplierNames);
   const supplier = supplierById(product.supplierId);
-  const canSeeName = role === 'admin' && revealSupplierNames;
+  const isAdmin = role === 'admin';
+  const canSeeName = isAdmin && revealSupplierNames;
 
   return (
     <article className="overflow-hidden rounded-panel border border-hairline bg-paper transition-colors hover:border-ink/20">
@@ -41,9 +51,14 @@ export function ProductCard({ product, result, rank, onOrderSample, footer }: Pr
               {String(rank).padStart(2, '0')}
             </span>
           )}
-          {product.source === 'sourced' && (
+          {product.source === 'sourced' && product.publishStatus === 'published' && (
             <span className="absolute bottom-3 left-3 rounded-pill bg-lime px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.12em] text-ink">
               newly sourced
+            </span>
+          )}
+          {isAdmin && product.publishStatus === 'draft' && (
+            <span className="absolute bottom-3 left-3 rounded-pill bg-warn-soft px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.12em] text-warn">
+              draft
             </span>
           )}
         </div>
@@ -51,21 +66,41 @@ export function ProductCard({ product, result, rank, onOrderSample, footer }: Pr
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-3">
             <span className="num text-[12px] tracking-wider text-muted">{product.id}</span>
-            <span className="text-[12px] text-muted">
-              {canSeeName ? `${supplier?.name} · ${supplier?.country}` : supplierAlias(product.supplierId)}
-            </span>
-            {role === 'admin' && (
-              <button
-                type="button"
-                onClick={toggleSupplierNames}
-                className="text-[11px] text-muted underline decoration-hairline underline-offset-4 transition-colors hover:text-ink"
-              >
-                {revealSupplierNames ? 'hide manufacturer' : 'show manufacturer'}
-              </button>
-            )}
+            {isAdmin ? (
+              <>
+                <span className="text-[12px] text-muted">
+                  {canSeeName
+                    ? `${supplier?.name} · ${supplier?.country}`
+                    : supplierAlias(product.supplierId)}
+                </span>
+                <button
+                  type="button"
+                  onClick={toggleSupplierNames}
+                  className="text-[11px] text-muted underline decoration-hairline underline-offset-4 transition-colors hover:text-ink"
+                >
+                  {revealSupplierNames ? 'hide manufacturer' : 'show manufacturer'}
+                </button>
+              </>
+            ) : null}
           </div>
 
-          <h3 className="mt-1.5 text-[22px] font-semibold display-tight">{product.name}</h3>
+          <h3 className="mt-1.5 text-[22px] font-semibold display-tight">
+            {role === 'customer' ? (
+              <Link
+                to={`/products/${product.id}${briefId ? `?brief=${briefId}` : ''}`}
+                className="transition-colors hover:text-ink-soft"
+              >
+                {product.name}
+              </Link>
+            ) : (
+              <Link
+                to={`/admin/catalog/${product.id}`}
+                className="transition-colors hover:text-ink-soft"
+              >
+                {product.name}
+              </Link>
+            )}
+          </h3>
           <p className="mt-1 text-[13px] text-muted">
             {product.category} · {product.subCategory} · {product.applicationArea.join(', ')}
           </p>
@@ -135,6 +170,13 @@ export function ProductCard({ product, result, rank, onOrderSample, footer }: Pr
           )}
 
           <div className="mt-auto flex flex-col gap-2">
+            {role === 'customer' && (
+              <Button variant="outline" asChild>
+                <Link to={`/products/${product.id}${briefId ? `?brief=${briefId}` : ''}`}>
+                  Open product
+                </Link>
+              </Button>
+            )}
             {onOrderSample && <Button onClick={() => onOrderSample(product)}>Order sample</Button>}
             {footer}
           </div>

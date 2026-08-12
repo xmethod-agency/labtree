@@ -222,6 +222,8 @@ export const products: Product[] = seeds.map((seed) => ({
   inStockSamples: !seed.noSample,
   description: describe(seed),
   source: 'catalog',
+  publishStatus: 'published',
+  sourcedFromBriefId: null,
   createdAt: '2026-01-14T09:00:00.000Z',
 }));
 

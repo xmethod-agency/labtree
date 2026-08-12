@@ -5,6 +5,7 @@ const BRIEF_STATUS: Record<BriefStatus, { label: string; variant: 'neutral' | 'w
   draft: { label: 'Draft', variant: 'neutral' },
   matching: { label: 'Matching', variant: 'lavender' },
   matched: { label: 'Matched', variant: 'good' },
+  sourcing_requested: { label: 'Sourcing requested', variant: 'warn' },
   sourcing: { label: 'Sourcing', variant: 'warn' },
   completed: { label: 'Completed', variant: 'neutral' },
 };
@@ -12,10 +13,12 @@ const BRIEF_STATUS: Record<BriefStatus, { label: string; variant: 'neutral' | 'w
 const THREAD_STATUS: Record<ThreadStatus, { label: string; variant: 'neutral' | 'warn' | 'good' | 'lavender' | 'bad' }> = {
   draft: { label: 'Draft', variant: 'neutral' },
   sent: { label: 'Sent', variant: 'lavender' },
-  awaiting_reply: { label: 'Awaiting reply', variant: 'warn' },
-  replied: { label: 'Reply received', variant: 'lavender' },
-  parsed: { label: 'Offer extracted', variant: 'good' },
+  awaiting_reply: { label: 'Awaiting form', variant: 'warn' },
+  replied: { label: 'Form received', variant: 'lavender' },
+  parsed: { label: 'Offer ready', variant: 'good' },
   declined: { label: 'Declined', variant: 'bad' },
+  draft_created: { label: 'Draft product', variant: 'lavender' },
+  published: { label: 'Published', variant: 'good' },
   imported: { label: 'In catalog', variant: 'good' },
 };
 

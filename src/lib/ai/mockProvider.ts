@@ -149,22 +149,23 @@ export function parseOfferFromBody(body: string, brief: Brief): ParsedOffer {
   };
 }
 
-export function supplierEmailTemplate({ brief, supplier }: DraftEmailInput) {
+export function supplierEmailTemplate({ brief, supplier, formUrl }: DraftEmailInput) {
   const certs = brief.certifications?.length
     ? brief.certifications.map((c) => CERTIFICATION_LABEL[c]).join(', ')
     : 'none';
-  const subject = `Product enquiry — ${brief.subCategory ?? 'product'} ${brief.volumeMl ?? '—'} ml (${certs})`;
+  const subject = `RFQ ${brief.id} — ${brief.subCategory ?? 'product'} ${brief.volumeMl ?? '—'} ml`;
 
   const row = (label: string, value: string) => `• ${label.padEnd(18, ' ')}${value}`;
 
-  const body = `Dear Sir or Madam,
+  const body = `Dear ${supplier.name} team,
 
-on behalf of one of our customers we are looking for the following product:
+Labtree is requesting a standardised offer for the following specification:
 
 ${row('Category:', `${brief.category ?? '—'} / ${brief.subCategory ?? '—'}`)}
 ${row('Application:', brief.applicationArea?.join(', ') || '—')}
 ${row('Fill volume:', `${brief.volumeMl ?? '—'} ml`)}
 ${row('Actives:', brief.keyIngredients?.join(', ') || '—')}
+${row('Exclusions / notes:', brief.notes || '—')}
 ${row('Certifications:', certs)}
 ${row('Label:', brief.labelType ? LABEL_TYPE_LABEL[brief.labelType] : 'both possible')}
 ${row('Target quantity:', `from ${formatNumber(brief.quantity ?? 0)} units`)}
@@ -172,14 +173,16 @@ ${row(
   'Target price:',
   `${(brief.targetPriceMin ?? 0).toFixed(2)}–${(brief.targetPriceMax ?? 0).toFixed(2)} € / unit`,
 )}
+${row('Sample required:', 'yes')}
 
-Please send us your offer including data sheet and INCI list. Reference: ${brief.id}.
+Please submit your offer via your personal response form (do not reply to this email):
+
+${formUrl}
+
+Reference: ${brief.id}
 
 Kind regards
-${agency.signature}
-
---
-Enquiry sent to: ${supplier.name}, ${supplier.country}`;
+${agency.signature}`;
 
   return { subject, body };
 }
